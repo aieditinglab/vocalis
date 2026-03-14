@@ -9,7 +9,7 @@ interface AvatarDisplayProps {
 export default function AvatarDisplay({ config, size = 120 }: AvatarDisplayProps) {
   const { skinColor, hairStyle, hairColor, accessory, outfitColor, bgColor } = config
 
-  const hairPaths: Record<number, JSX.Element> = {
+  const hairPaths: Record<number, React.ReactElement> = {
     // 0: Short/buzzcut
     0: <ellipse cx="50" cy="32" rx="22" ry="10" fill={hairColor} />,
     // 1: Wavy medium
@@ -40,7 +40,7 @@ export default function AvatarDisplay({ config, size = 120 }: AvatarDisplayProps
     </>,
   }
 
-  const accessoryPaths: Record<number, JSX.Element | null> = {
+  const accessoryPaths: Record<number, React.ReactElement | null> = {
     0: null,
     // 1: Glasses
     1: <>
