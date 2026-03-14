@@ -110,3 +110,213 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
 .mic-perm-box{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:48px;text-align:center;max-width:460px;margin:0 auto;}
 .shimmer{background:linear-gradient(90deg,var(--card) 25%,var(--card2) 50%,var(--card) 75%);background-size:200% auto;animation:shimmer 1.5s linear infinite;}
 .text-muted{color:var(--text-muted);}.text-accent{color:var(--accent);}.text-hot{color:var(--hot);}.text-amber{color:var(--amber);}.text-blue{color:var(--blue);}
+
+/* ── TABLET (max 768px) ── */
+@media (max-width: 768px) {
+  .nav {
+    padding: 14px 20px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .nav > div {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .btn-sm {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+  .container {
+    padding: 40px 20px;
+  }
+  .container-lg {
+    padding: 40px 20px;
+  }
+  .stats-box {
+    padding: 32px 20px;
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .stats-box > div {
+    border-left: none !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+  .stats-box > div:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .grid-2-col {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── PHONE (max 480px) ── */
+@media (max-width: 480px) {
+  .nav {
+    padding: 12px 16px;
+  }
+
+  /* Hide non-essential nav buttons on small screens */
+  .nav-hide-mobile {
+    display: none !important;
+  }
+
+  /* Hero headline sizing */
+  h1.hero-headline {
+    font-size: clamp(48px, 14vw, 72px) !important;
+  }
+
+  /* Containers */
+  .container {
+    padding: 32px 16px;
+  }
+  .container-lg {
+    padding: 32px 16px;
+  }
+
+  /* Cards */
+  .card {
+    border-radius: 16px;
+  }
+  .dash-card {
+    padding: 20px 16px;
+    border-radius: 16px;
+  }
+  .game-card {
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+  .clarity-hero {
+    padding: 32px 20px;
+  }
+  .clarity-num {
+    font-size: 72px !important;
+  }
+  .feedback-card {
+    padding: 20px 16px;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mic-perm-box {
+    padding: 32px 20px;
+  }
+
+  /* Buttons */
+  .btn-lg {
+    padding: 16px 24px;
+    font-size: 15px;
+  }
+
+  /* Record button stays same size */
+  .rec-btn {
+    width: 110px;
+    height: 110px;
+  }
+  .pulse-ring {
+    width: 110px;
+    height: 110px;
+  }
+
+  /* Timer */
+  .timer-display {
+    font-size: 56px !important;
+  }
+
+  /* Metric grid — 1 col on phone */
+  .metrics-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .metric-card {
+    padding: 20px;
+  }
+
+  /* Category grid — 1 col on phone */
+  .cat-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Compare grid — 2 col on phone */
+  .compare-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Stats row — wrap on phone */
+  .stats-row-5 {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* VOCAL letters */
+  .vocal-letter {
+    font-size: clamp(36px, 10vw, 60px) !important;
+  }
+
+  /* VOCAL method cards — 3 col then wrap */
+  .vocal-cards {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Shop grid */
+  .shop-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+
+  /* Avatar layout — stack on mobile */
+  .avatar-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .avatar-sticky {
+    position: static !important;
+  }
+
+  /* Games grid — 1 col */
+  .games-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Dashboard stats — 2 col */
+  .dash-stats-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Token display in nav */
+  .token-display {
+    font-size: 12px !important;
+    padding: 5px 10px !important;
+  }
+
+  /* Settings rows */
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .settings-row input,
+  .settings-row select {
+    width: 100% !important;
+  }
+
+  /* Marquee text smaller */
+  .marquee-inner span {
+    font-size: 11px !important;
+    padding: 0 14px !important;
+  }
+}
+
+/* ── VERY SMALL (max 360px — older Androids) ── */
+@media (max-width: 360px) {
+  .container {
+    padding: 24px 14px;
+  }
+  .container-lg {
+    padding: 24px 14px;
+  }
+  .btn-lg {
+    padding: 14px 18px;
+    font-size: 14px;
+  }
+  .clarity-num {
+    font-size: 60px !important;
+  }
+}
