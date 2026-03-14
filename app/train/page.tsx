@@ -242,7 +242,7 @@ export default function TrainPage() {
 
   return (
     <>
-      <Nav showDashLinks rightContent={<Link href="/record" className="btn btn-primary btn-sm">New Rep 🎤</Link>} />
+      <Nav showApp rightContent={<Link href="/record" className="btn btn-primary btn-sm">New Rep 🎤</Link>} />
 
       <div className="container-lg">
         {/* Greeting */}
