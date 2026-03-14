@@ -1,3 +1,4 @@
+import React from 'react'
 import type { AvatarConfig } from '@/lib/types'
 
 interface AvatarDisplayProps {
