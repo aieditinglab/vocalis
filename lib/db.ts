@@ -1,3 +1,4 @@
+'use client'
 import { createClient } from './supabase'
 import type { Session, UserSettings, AvatarConfig, GameScore } from './types'
 import { DEFAULT_SETTINGS, DEFAULT_AVATAR } from './types'
