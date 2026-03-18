@@ -18,11 +18,13 @@ export async function signUp(email: string, password: string, name: string) {
   if (error) return { user: null, error: error.message }
   if (data.user) {
     // Try to create profile — don't fail if it already exists
-    await sb.from('profiles').upsert({
-      id: data.user.id,
-      name,
-      email: email.trim().toLowerCase()
-    }).catch(() => {})
+    try {
+      await sb.from('profiles').upsert({
+        id: data.user.id,
+        name,
+        email: email.trim().toLowerCase()
+      })
+    } catch {}
   }
   return { user: data.user, error: null }
 }
