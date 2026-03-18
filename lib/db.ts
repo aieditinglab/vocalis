@@ -22,7 +22,7 @@ export async function signUp(email: string, password: string, name: string) {
       id: data.user.id,
       name,
       email: email.trim().toLowerCase()
-    }).throwOnError().catch(() => {})
+    }).catch(() => {})
   }
   return { user: data.user, error: null }
 }
