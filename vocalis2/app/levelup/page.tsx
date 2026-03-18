@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { getPendingSession, clearPendingSession, saveSession, getSessions, addTokens } from '@/lib/db'
+import { getPendingSession, clearPendingSession, saveSession, getSessions, addTokens, getUser } from '@/lib/db'
 import { generateCoaching, detectPersonalBests, getCelebrationMessage } from '@/lib/coachingEngine'
 import type { Session } from '@/lib/types'
 
@@ -22,25 +22,38 @@ function tokensForSession(clarity: number, duration: number, fillerCount: number
 
 export default function LevelUpPage() {
   const router = useRouter()
-  const [session, setSession] = useState<Session | null>(null)
-  const [prev, setPrev] = useState<Session | null>(null)
-  const [tokensEarned, setTokensEarned] = useState(0)
-  const [bests, setBests] = useState<any>(null)
+  const [session, setSession]     = useState<Session | null>(null)
+  const [prev, setPrev]           = useState<Session | null>(null)
+  const [tokensEarned, setTokens] = useState(0)
+  const [bests, setBests]         = useState<any>(null)
   const [celebration, setCelebration] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading]     = useState(true)
+  const [saveError, setSaveError] = useState(false)
 
   useEffect(() => {
     const run = async () => {
+      // Check user is logged in
+      const user = await getUser()
+      if (!user) {
+        // Don't kick out — just show a save error message
+        setSaveError(true)
+        setLoading(false)
+        return
+      }
+
       const p = getPendingSession()
-      if (!p) { setLoading(false); return }
+      if (!p) {
+        setLoading(false)
+        return
+      }
 
+      // Get history
       const history = await getSessions()
-      const prev = history[0] || null
-      setPrev(prev)
+      const prevSession = history[0] || null
+      setPrev(prevSession)
 
-      // Generate coaching using the engine with history
-      const settings = { targetWpmMin: 140, targetWpmMax: 160 }
-      const tempSession: Session = {
+      // Build session object
+      const newSession: Session = {
         id: `s_${Date.now()}`,
         date: new Date().toISOString(),
         category: (p as any).category || 'Unknown',
@@ -56,24 +69,33 @@ export default function LevelUpPage() {
       }
 
       // Generate deep coaching
-      const coaching = generateCoaching(tempSession, history, settings.targetWpmMin, settings.targetWpmMax)
-      tempSession.feedback = coaching
+      const coaching = generateCoaching(newSession, history, 140, 160)
+      newSession.feedback = coaching
 
-      // Detect personal bests
-      const pb = detectPersonalBests(tempSession, history)
+      // Personal bests
+      const pb = detectPersonalBests(newSession, history)
       setBests(pb)
-      setCelebration(getCelebrationMessage(tempSession.clarityScore, pb, history.length === 0))
+      setCelebration(getCelebrationMessage(newSession.clarityScore, pb, history.length === 0))
 
       // Tokens
-      const earned = tokensForSession(tempSession.clarityScore, tempSession.duration, tempSession.fillerCount)
-      setTokensEarned(earned)
-      tempSession.tokensEarned = earned
+      const earned = tokensForSession(newSession.clarityScore, newSession.duration, newSession.fillerCount)
+      setTokens(earned)
+      newSession.tokensEarned = earned
 
-      // Save to Supabase
-      await saveSession(tempSession)
+      // Save to Supabase — don't block UI if it fails
+      const saved = await saveSession(newSession)
+      if (!saved) {
+        console.error('Session save failed — will retry')
+        // Retry once
+        setTimeout(async () => {
+          await saveSession(newSession)
+        }, 2000)
+      }
+
+      // Add tokens regardless of save status
       await addTokens(earned)
 
-      setSession(tempSession)
+      setSession(newSession)
       clearPendingSession()
       setLoading(false)
     }
@@ -82,7 +104,7 @@ export default function LevelUpPage() {
 
   useEffect(() => {
     if (!session) return
-    const run = async () => {
+    const buildChart = async () => {
       const sessions = await getSessions()
       const pts = sessions.slice(0, 10).map(s => s.clarityScore).reverse()
       if (pts.length < 2) return
@@ -101,14 +123,16 @@ export default function LevelUpPage() {
       const svg = document.getElementById('chart-svg')
       if (svg) svg.innerHTML = `<defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#AAFF00" stop-opacity=".22"/><stop offset="100%" stop-color="#AAFF00" stop-opacity="0"/></linearGradient></defs><path d="${areaD}" fill="url(#g1)"/><path d="${pathD}" stroke="#AAFF00" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>${dots}`
     }
-    run()
+    buildChart()
   }, [session])
 
   if (loading) return (
     <>
       <Nav />
       <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }}>
-        <div className="font-display" style={{ fontSize: '18px', color: 'var(--text-muted)' }}>Saving your session...</div>
+        <div style={{ fontSize: '48px', marginBottom: '20px', animation: 'float 2s ease-in-out infinite' }}>✦</div>
+        <div className="font-display" style={{ fontSize: '20px', color: 'var(--accent)', letterSpacing: '-.02em' }}>Saving your session...</div>
+        <p className="text-muted" style={{ marginTop: '8px', fontSize: '14px' }}>Calculating your score and coaching</p>
       </div>
     </>
   )
@@ -117,8 +141,19 @@ export default function LevelUpPage() {
     <>
       <Nav />
       <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }}>
-        <p className="text-muted">No session data found.</p>
-        <button className="btn btn-outline btn-sm" style={{ marginTop: '16px' }} onClick={() => router.push('/record')}>Start Recording</button>
+        {saveError ? (
+          <>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+            <h2 className="font-display" style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>Session not saved</h2>
+            <p className="text-muted" style={{ marginBottom: '24px' }}>You may need to log in again. Your recording was completed.</p>
+            <button className="btn btn-primary btn-lg" onClick={() => router.push('/auth')}>Log In →</button>
+          </>
+        ) : (
+          <>
+            <p className="text-muted">No session data found.</p>
+            <button className="btn btn-outline btn-sm" style={{ marginTop: '16px' }} onClick={() => router.push('/record')}>Start Recording</button>
+          </>
+        )}
       </div>
     </>
   )
@@ -132,7 +167,7 @@ export default function LevelUpPage() {
       <div className="container">
         <p className="eyebrow anim-slide-up anim-d1">STEP 5 — LEVEL UP</p>
 
-        {/* Personal best banner */}
+        {/* Personal best banners */}
         {bests?.highestClarity && (
           <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.08)', border: '1px solid rgba(170,255,0,0.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🏆</span>
@@ -142,17 +177,17 @@ export default function LevelUpPage() {
             </div>
           </div>
         )}
-        {bests?.lowestFillers && session.fillerCount >= 0 && (
+        {bests?.lowestFillers && session.fillerCount === 0 && (
           <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.08)', border: '1px solid rgba(170,255,0,0.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🎯</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>Fewest Filler Words Ever!</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Your best filler word count to date.</div>
+              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>Zero Filler Words!</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>A perfectly clean recording.</div>
             </div>
           </div>
         )}
 
-        {/* Tokens earned */}
+        {/* Tokens */}
         <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.06)', border: '1px solid rgba(170,255,0,0.2)', borderRadius: '16px', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <span style={{ fontWeight: 600 }}>Tokens earned this session</span>
           <span className="font-display" style={{ fontSize: '24px', fontWeight: 900, color: 'var(--accent)' }}>+{tokensEarned} 🪙</span>
@@ -169,26 +204,26 @@ export default function LevelUpPage() {
             </p>
           )}
           {celebration && (
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '10px', fontStyle: 'italic', maxWidth: '380px', margin: '10px auto 0', lineHeight: 1.5 }}>
+            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '10px', fontStyle: 'italic', maxWidth: '380px', margin: '10px auto 0', lineHeight: 1.6 }}>
               &ldquo;{celebration}&rdquo;
             </p>
           )}
         </div>
 
-        {/* Compare vs last */}
+        {/* Compare */}
         {prev && (
           <div className="anim-slide-up anim-d3" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '14px' }}>
             <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '18px' }}>VS LAST SESSION</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
               {[
-                { label: 'Fillers',  val: session.fillerCount, delta: fillerDelta, better: (fillerDelta ?? 0) <= 0 },
-                { label: 'Pace',     val: session.pace > 0 ? `${session.pace}` : '—', delta: null, better: true },
-                { label: 'Length',   val: fmt(session.duration), delta: null, better: true },
-                { label: 'Clarity',  val: session.clarityScore, delta: clarityDelta, better: (clarityDelta ?? 0) >= 0, accent: true },
+                { label: 'Fillers',  val: session.fillerCount,               delta: fillerDelta,   better: (fillerDelta ?? 0) <= 0 },
+                { label: 'Pace',     val: session.pace > 0 ? session.pace : '—', delta: null,      better: true },
+                { label: 'Length',   val: fmt(session.duration),             delta: null,          better: true },
+                { label: 'Clarity',  val: session.clarityScore,              delta: clarityDelta,  better: (clarityDelta ?? 0) >= 0, accent: true },
               ].map(c => (
                 <div key={c.label} style={{ textAlign: 'center' }}>
                   <div className="text-muted" style={{ fontSize: '11px', marginBottom: '6px' }}>{c.label}</div>
-                  <div style={{ fontSize: typeof c.val === 'string' && c.val.length > 4 ? '13px' : '20px', fontWeight: 700, color: (c as any).accent ? 'var(--accent)' : 'var(--text-primary)' }}>{c.val}</div>
+                  <div style={{ fontSize: String(c.val).length > 4 ? '13px' : '20px', fontWeight: 700, color: (c as any).accent ? 'var(--accent)' : 'var(--text-primary)' }}>{c.val}</div>
                   {c.delta !== null && (
                     <div style={{ fontSize: '11px', marginTop: '4px', color: c.better ? 'var(--accent)' : 'var(--hot)' }}>
                       {(c.delta ?? 0) > 0 ? '+' : ''}{c.delta}
@@ -200,7 +235,7 @@ export default function LevelUpPage() {
           </div>
         )}
 
-        {/* Deep coaching feedback */}
+        {/* Coaching */}
         <div className="anim-slide-up anim-d3" style={{ marginBottom: '14px' }}>
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '14px' }}>YOUR COACHING</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
