@@ -39,15 +39,36 @@ function AuthPageInner() {
           setLoading(false)
           return
         }
+        console.log('✅ Sign-up successful, email:', email)
+        // Verify session was created before moving to verify screen
+        const sb = createClient()
+        const { data: { session } } = await sb.auth.getSession()
+        if (!session) {
+          setErr('Session not created. Please try again.')
+          setLoading(false)
+          return
+        }
         setPhase('verify')
         setCountdown(60)
         setLoading(false)
       } else {
         const { user, error } = await signIn(email, pass)
         if (error) { setErr(error); setLoading(false); return }
-        router.push('/dashboard')
+        console.log('✅ Login successful, navigating to dashboard')
+        // Verify session before navigation
+        const sb = createClient()
+        const { data: { session } } = await sb.auth.getSession()
+        if (session) {
+          router.push('/dashboard')
+        } else {
+          setErr('Login succeeded but session not established. Refreshing...')
+          setLoading(false)
+          // Force refresh to sync auth state
+          setTimeout(() => location.reload(), 1000)
+        }
       }
-    } catch {
+    } catch (e) {
+      console.error('❌ Submit error:', e)
       setErr('Something went wrong. Please try again.')
       setLoading(false)
     }
@@ -59,14 +80,24 @@ function AuthPageInner() {
     setLoading(true)
     try {
       const sb = createClient()
+      console.log('📧 Attempting to resend email to:', email)
       const { error } = await sb.auth.resend({
         type: 'signup',
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
       })
-      if (error) setErr('Could not resend: ' + error.message)
-      else setCountdown(60)
-    } catch {
+      console.log('Resend API response:', { error })
+      if (error) {
+        console.error('❌ Resend error:', error.message)
+        setErr('Could not resend: ' + error.message)
+        // Don't set countdown on error—let user try again immediately
+        setLoading(false)
+        return
+      }
+      console.log('✅ Email resent successfully')
+      setCountdown(60) // Only set countdown on success
+    } catch (e) {
+      console.error('❌ Resend exception:', e)
       setErr('Could not resend email. Please try again.')
     }
     setLoading(false)
