@@ -42,26 +42,26 @@ function analyzeTranscript(transcript: string, duration: number) {
 export default function RecordSessionPage() {
   const router = useRouter()
   const pending = getPendingSession()
-  const [phase, setPhase]       = useState<Phase>('perm')
-  const [secs, setSecs]         = useState(0)
-  const [tooShort, setTooShort] = useState(false)
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [duration, setDuration] = useState(0)
-  const [playTime, setPlayTime] = useState(0)
+  const [phase, setPhase]         = useState<Phase>('perm')
+  const [secs, setSecs]           = useState(0)
+  const [tooShort, setTooShort]   = useState(false)
+  const [audioUrl, setAudioUrl]   = useState<string | null>(null)
+  const [duration, setDuration]   = useState(0)
+  const [playTime, setPlayTime]   = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [permErr, setPermErr]   = useState('')
+  const [permErr, setPermErr]     = useState('')
   const [liveTranscript, setLiveTranscript] = useState('')
   const [speechSupported, setSpeechSupported] = useState(false)
 
-  const mediaRef   = useRef<MediaRecorder | null>(null)
-  const chunksRef  = useRef<Blob[]>([])
-  const recognitionResultCountRef = useRef(0)
-  const timerRef   = useRef<NodeJS.Timeout | null>(null)
-  const audioRef   = useRef<HTMLAudioElement | null>(null)
-  const playTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const finalSecs  = useRef(0)
+  const mediaRef       = useRef<MediaRecorder | null>(null)
+  const chunksRef      = useRef<Blob[]>([])
+  const timerRef       = useRef<NodeJS.Timeout | null>(null)
+  const audioRef       = useRef<HTMLAudioElement | null>(null)
+  const playTimerRef   = useRef<NodeJS.Timeout | null>(null)
+  const finalSecs      = useRef(0)
   const recognitionRef = useRef<any>(null)
   const fullTranscriptRef = useRef('')
+  const recognitionResultCountRef = useRef(0)
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -83,41 +83,45 @@ export default function RecordSessionPage() {
   }
 
   const startSpeechRecognition = () => {
-  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-  if (!SR) return
-  fullTranscriptRef.current = ''
-  recognitionResultCountRef.current = 0
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) return
+    fullTranscriptRef.current = ''
+    recognitionResultCountRef.current = 0
 
-  const r = new SR()
-  r.continuous = true; r.interimResults = true; r.lang = 'en-US'; r.maxAlternatives = 1
+    const r = new SR()
+    r.continuous = true; r.interimResults = true; r.lang = 'en-US'; r.maxAlternatives = 1
 
-  r.onresult = (e: any) => {
-    let final = ''
-    for (let i = recognitionResultCountRef.current; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        final += e.results[i][0].transcript + ' '
-        recognitionResultCountRef.current = i + 1
+    r.onresult = (e: any) => {
+      let final = ''
+      for (let i = recognitionResultCountRef.current; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          final += e.results[i][0].transcript + ' '
+          recognitionResultCountRef.current = i + 1
+        }
+      }
+      if (final) {
+        fullTranscriptRef.current += final
+        setLiveTranscript(fullTranscriptRef.current)
       }
     }
-    if (final) {
-      fullTranscriptRef.current += final
-      setLiveTranscript(fullTranscriptRef.current)
-    }
-  }
-    const stopSpeechRecognition = () => {
-  if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {}; recognitionRef.current = null }
-}
 
-  r.onerror = () => {}
+    r.onerror = () => {}
 
-  r.onend = () => {
-    if (mediaRef.current?.state === 'recording') {
-      try { r.start() } catch {}
+    r.onend = () => {
+      if (mediaRef.current?.state === 'recording') {
+        try { r.start() } catch {}
+      }
     }
+
+    try { r.start(); recognitionRef.current = r } catch {}
   }
 
-  try { r.start(); recognitionRef.current = r } catch {}
-}
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch {}
+      recognitionRef.current = null
+    }
+  }
 
   const startRec = async () => {
     setPermErr('')
@@ -141,6 +145,7 @@ export default function RecordSessionPage() {
       mediaRef.current = recorder
       setPhase('recording'); setSecs(0); finalSecs.current = 0; setTooShort(false)
       fullTranscriptRef.current = ''; setLiveTranscript('')
+      recognitionResultCountRef.current = 0
       if (speechSupported) startSpeechRecognition()
       timerRef.current = setInterval(() => {
         setSecs(prev => { const n = prev + 1; finalSecs.current = n; if (n >= MAX) { stopRec(); return MAX } return n })
@@ -169,11 +174,9 @@ export default function RecordSessionPage() {
   }
 
   const goNext = () => {
-    // Save analysis to pending session
     const analysis = analyzeTranscript(fullTranscriptRef.current, duration)
     const p = getPendingSession() || {}
     setPendingSession({ ...p, ...analysis, duration })
-    // Go to self-rate first, then AI analysis
     router.push('/self-rate')
   }
 
@@ -182,6 +185,7 @@ export default function RecordSessionPage() {
     setPlayTime(0); setIsPlaying(false)
     audioStore.clear(); setAudioUrl(null)
     setLiveTranscript(''); fullTranscriptRef.current = ''
+    recognitionResultCountRef.current = 0
   }
 
   const timerColor = phase === 'recording' ? (secs < 30 ? 'var(--hot)' : 'var(--accent)') : 'var(--text-muted)'
