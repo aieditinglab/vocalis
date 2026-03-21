@@ -84,10 +84,9 @@ export async function signOut() {
 export async function getUser() {
   const sb = createClient()
   try {
-    // Always verify with server - never trust cache
-    const { data: { user }, error } = await sb.auth.getUser()
-    if (error || !user) return null
-    return user
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session?.user) return null
+    return session.user
   } catch {
     return null
   }
