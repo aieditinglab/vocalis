@@ -104,6 +104,9 @@ export default function RecordSessionPage() {
       setLiveTranscript(fullTranscriptRef.current)
     }
   }
+    const stopSpeechRecognition = () => {
+  if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {}; recognitionRef.current = null }
+}
 
   r.onerror = () => {}
 
