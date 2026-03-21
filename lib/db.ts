@@ -134,7 +134,7 @@ export async function saveSession(s: Session): Promise<boolean> {
   const user = await getUser()
 
   if (!user) {
-    console.error('saveSession: no authenticated user')
+    console.error('saveSession: no authenticated user — session check failed')
     return false
   }
 
