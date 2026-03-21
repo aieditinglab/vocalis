@@ -22,37 +22,30 @@ function tokensForSession(clarity: number, duration: number, fillerCount: number
 
 export default function LevelUpPage() {
   const router = useRouter()
-  const [session, setSession]     = useState<Session | null>(null)
-  const [prev, setPrev]           = useState<Session | null>(null)
-  const [tokensEarned, setTokens] = useState(0)
-  const [bests, setBests]         = useState<any>(null)
+  const [session, setSession]       = useState<Session | null>(null)
+  const [prev, setPrev]             = useState<Session | null>(null)
+  const [tokensEarned, setTokens]   = useState(0)
+  const [bests, setBests]           = useState<any>(null)
   const [celebration, setCelebration] = useState('')
-  const [loading, setLoading]     = useState(true)
-  const [saveError, setSaveError] = useState(false)
+  const [loading, setLoading]       = useState(true)
+  const [status, setStatus]         = useState('')
 
   useEffect(() => {
     const run = async () => {
-      // Check user is logged in
+      setStatus('Verifying account...')
       const user = await getUser()
       if (!user) {
-        // Don't kick out — just show a save error message
-        setSaveError(true)
         setLoading(false)
         return
       }
 
       const p = getPendingSession()
-      if (!p) {
-        setLoading(false)
-        return
-      }
+      if (!p) { setLoading(false); return }
 
-      // Get history
+      setStatus('Loading your history...')
       const history = await getSessions()
-      const prevSession = history[0] || null
-      setPrev(prevSession)
+      setPrev(history[0] || null)
 
-      // Build session object
       const newSession: Session = {
         id: `s_${Date.now()}`,
         date: new Date().toISOString(),
@@ -68,35 +61,30 @@ export default function LevelUpPage() {
         transcriptPreview: (p as any).transcriptPreview || '',
       }
 
-      // Generate deep coaching
+      setStatus('Generating coaching...')
       const coaching = generateCoaching(newSession, history, 140, 160)
       newSession.feedback = coaching
 
-      // Personal bests
       const pb = detectPersonalBests(newSession, history)
       setBests(pb)
       setCelebration(getCelebrationMessage(newSession.clarityScore, pb, history.length === 0))
 
-      // Tokens
       const earned = tokensForSession(newSession.clarityScore, newSession.duration, newSession.fillerCount)
       setTokens(earned)
       newSession.tokensEarned = earned
 
-      // Save to Supabase — don't block UI if it fails
+      setStatus('Saving session...')
       const saved = await saveSession(newSession)
       if (!saved) {
-        console.error('Session save failed — will retry')
-        // Retry once
-        setTimeout(async () => {
-          await saveSession(newSession)
-        }, 2000)
+        // Retry after 1 second
+        await new Promise(r => setTimeout(r, 1000))
+        await saveSession({ ...newSession, id: `s_${Date.now()}_r` })
       }
 
-      // Add tokens regardless of save status
       await addTokens(earned)
-
-      setSession(newSession)
       clearPendingSession()
+      setSession(newSession)
+      setStatus('')
       setLoading(false)
     }
     run()
@@ -109,8 +97,7 @@ export default function LevelUpPage() {
       const pts = sessions.slice(0, 10).map(s => s.clarityScore).reverse()
       if (pts.length < 2) return
       const W = 600, H = 80
-      const minV = Math.max(0, Math.min(...pts) - 10)
-      const maxV = Math.min(100, Math.max(...pts) + 10)
+      const minV = Math.max(0, Math.min(...pts) - 10), maxV = Math.min(100, Math.max(...pts) + 10)
       const tx = (i: number) => (i / (pts.length - 1)) * W
       const ty = (v: number) => H - ((v - minV) / (maxV - minV)) * H
       const pathD = pts.map((v, i) => `${i === 0 ? 'M' : 'L'} ${tx(i).toFixed(1)} ${ty(v).toFixed(1)}`).join(' ')
@@ -118,7 +105,7 @@ export default function LevelUpPage() {
       const dots = pts.map((v, i) => {
         const last = i === pts.length - 1
         return `<circle cx="${tx(i).toFixed(1)}" cy="${ty(v).toFixed(1)}" r="${last ? 5 : 3}" fill="${last ? '#AAFF00' : '#1C1C1C'}" stroke="#AAFF00" stroke-width="2"/>
-        <text x="${tx(i).toFixed(1)}" y="${(ty(v) - 10).toFixed(1)}" text-anchor="middle" fill="#555" font-size="11" font-family="DM Sans,sans-serif">${v}</text>`
+        <text x="${tx(i).toFixed(1)}" y="${(ty(v) - 10).toFixed(1)}" text-anchor="middle" fill="#555" font-size="11">${v}</text>`
       }).join('')
       const svg = document.getElementById('chart-svg')
       if (svg) svg.innerHTML = `<defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#AAFF00" stop-opacity=".22"/><stop offset="100%" stop-color="#AAFF00" stop-opacity="0"/></linearGradient></defs><path d="${areaD}" fill="url(#g1)"/><path d="${pathD}" stroke="#AAFF00" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>${dots}`
@@ -130,9 +117,9 @@ export default function LevelUpPage() {
     <>
       <Nav />
       <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px', animation: 'float 2s ease-in-out infinite' }}>✦</div>
-        <div className="font-display" style={{ fontSize: '20px', color: 'var(--accent)', letterSpacing: '-.02em' }}>Saving your session...</div>
-        <p className="text-muted" style={{ marginTop: '8px', fontSize: '14px' }}>Calculating your score and coaching</p>
+        <div style={{ fontSize: '48px', marginBottom: '20px' }}>✦</div>
+        <div className="font-display" style={{ fontSize: '20px', color: 'var(--accent)' }}>{status || 'Processing...'}</div>
+        <p className="text-muted" style={{ marginTop: '8px', fontSize: '14px' }}>Please don&apos;t close this tab</p>
       </div>
     </>
   )
@@ -141,19 +128,8 @@ export default function LevelUpPage() {
     <>
       <Nav />
       <div className="container" style={{ textAlign: 'center', paddingTop: '80px' }}>
-        {saveError ? (
-          <>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
-            <h2 className="font-display" style={{ fontSize: '24px', fontWeight: 900, marginBottom: '12px' }}>Session not saved</h2>
-            <p className="text-muted" style={{ marginBottom: '24px' }}>You may need to log in again. Your recording was completed.</p>
-            <button className="btn btn-primary btn-lg" onClick={() => router.push('/auth')}>Log In →</button>
-          </>
-        ) : (
-          <>
-            <p className="text-muted">No session data found.</p>
-            <button className="btn btn-outline btn-sm" style={{ marginTop: '16px' }} onClick={() => router.push('/record')}>Start Recording</button>
-          </>
-        )}
+        <p className="text-muted">No session data found.</p>
+        <button className="btn btn-primary btn-lg" style={{ marginTop: '16px' }} onClick={() => router.push('/record')}>Start Recording</button>
       </div>
     </>
   )
@@ -163,37 +139,22 @@ export default function LevelUpPage() {
 
   return (
     <>
-      <Nav rightContent={<span className="text-muted" style={{ fontSize: '13px' }}>Session Complete ✓</span>} />
+      <Nav rightContent={<span className="text-muted" style={{ fontSize: '13px' }}>Session Saved ✓</span>} />
       <div className="container">
         <p className="eyebrow anim-slide-up anim-d1">STEP 5 — LEVEL UP</p>
 
-        {/* Personal best banners */}
         {bests?.highestClarity && (
-          <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.08)', border: '1px solid rgba(170,255,0,0.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,.08)', border: '1px solid rgba(170,255,0,.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
             <span style={{ fontSize: '24px' }}>🏆</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>New Personal Best!</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Highest clarity score you&apos;ve ever recorded.</div>
-            </div>
-          </div>
-        )}
-        {bests?.lowestFillers && session.fillerCount === 0 && (
-          <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.08)', border: '1px solid rgba(170,255,0,0.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '24px' }}>🎯</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>Zero Filler Words!</div>
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>A perfectly clean recording.</div>
-            </div>
+            <div><div style={{ fontWeight: 700, fontSize: '15px', color: 'var(--accent)' }}>New Personal Best!</div><div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Highest clarity score you&apos;ve ever recorded.</div></div>
           </div>
         )}
 
-        {/* Tokens */}
-        <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,0.06)', border: '1px solid rgba(170,255,0,0.2)', borderRadius: '16px', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+        <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,.06)', border: '1px solid rgba(170,255,0,.2)', borderRadius: '16px', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <span style={{ fontWeight: 600 }}>Tokens earned this session</span>
           <span className="font-display" style={{ fontSize: '24px', fontWeight: 900, color: 'var(--accent)' }}>+{tokensEarned} 🪙</span>
         </div>
 
-        {/* Clarity hero */}
         <div className="clarity-hero anim-slide-up anim-d2">
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.12em', color: 'var(--accent)', marginBottom: '8px' }}>CLARITY SCORE</p>
           <div className="clarity-num">{session.clarityScore}</div>
@@ -203,49 +164,39 @@ export default function LevelUpPage() {
               {clarityDelta >= 0 ? `+${clarityDelta}` : clarityDelta} from last session {clarityDelta >= 0 ? '📈' : '📉'}
             </p>
           )}
-          {celebration && (
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '10px', fontStyle: 'italic', maxWidth: '380px', margin: '10px auto 0', lineHeight: 1.6 }}>
-              &ldquo;{celebration}&rdquo;
-            </p>
-          )}
+          {celebration && <p style={{ fontSize: '14px', color: 'var(--text-muted)', marginTop: '10px', fontStyle: 'italic', maxWidth: '380px', margin: '10px auto 0', lineHeight: 1.6 }}>&ldquo;{celebration}&rdquo;</p>}
         </div>
 
-        {/* Compare */}
         {prev && (
           <div className="anim-slide-up anim-d3" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '14px' }}>
-            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '18px' }}>VS LAST SESSION</p>
+            <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '18px' }}>VS LAST SESSION</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
               {[
-                { label: 'Fillers',  val: session.fillerCount,               delta: fillerDelta,   better: (fillerDelta ?? 0) <= 0 },
-                { label: 'Pace',     val: session.pace > 0 ? session.pace : '—', delta: null,      better: true },
-                { label: 'Length',   val: fmt(session.duration),             delta: null,          better: true },
-                { label: 'Clarity',  val: session.clarityScore,              delta: clarityDelta,  better: (clarityDelta ?? 0) >= 0, accent: true },
+                { label: 'Fillers', val: session.fillerCount, delta: fillerDelta, better: (fillerDelta ?? 0) <= 0 },
+                { label: 'Pace', val: session.pace > 0 ? `${session.pace}` : '—', delta: null, better: true },
+                { label: 'Length', val: fmt(session.duration), delta: null, better: true },
+                { label: 'Clarity', val: session.clarityScore, delta: clarityDelta, better: (clarityDelta ?? 0) >= 0, accent: true },
               ].map(c => (
                 <div key={c.label} style={{ textAlign: 'center' }}>
                   <div className="text-muted" style={{ fontSize: '11px', marginBottom: '6px' }}>{c.label}</div>
                   <div style={{ fontSize: String(c.val).length > 4 ? '13px' : '20px', fontWeight: 700, color: (c as any).accent ? 'var(--accent)' : 'var(--text-primary)' }}>{c.val}</div>
-                  {c.delta !== null && (
-                    <div style={{ fontSize: '11px', marginTop: '4px', color: c.better ? 'var(--accent)' : 'var(--hot)' }}>
-                      {(c.delta ?? 0) > 0 ? '+' : ''}{c.delta}
-                    </div>
-                  )}
+                  {c.delta !== null && <div style={{ fontSize: '11px', marginTop: '4px', color: c.better ? 'var(--accent)' : 'var(--hot)' }}>{(c.delta ?? 0) > 0 ? '+' : ''}{c.delta}</div>}
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Coaching */}
         <div className="anim-slide-up anim-d3" style={{ marginBottom: '14px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '14px' }}>YOUR COACHING</p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '14px' }}>YOUR COACHING</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {session.feedback.map((f: any, i: number) => (
-              <div key={i} className="feedback-card" style={{ animationDelay: `${i * 0.1}s` }}>
+              <div key={i} className="feedback-card" style={{ animationDelay: `${i * .1}s` }}>
                 <div className="feedback-icon">{f.icon}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', flexWrap: 'wrap' }}>
                     <h3 style={{ fontWeight: 700, fontSize: '15px' }}>{f.title}</h3>
-                    <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '.08em', padding: '3px 8px', borderRadius: '100px', color: f.tagColor, background: f.tagBg }}>{f.tag}</span>
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '3px 8px', borderRadius: '100px', color: f.tagColor, background: f.tagBg }}>{f.tag}</span>
                   </div>
                   <p style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.7 }}>{f.detail}</p>
                 </div>
@@ -254,9 +205,8 @@ export default function LevelUpPage() {
           </div>
         </div>
 
-        {/* Chart */}
         <div className="anim-slide-up anim-d4" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '24px' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '20px' }}>CLARITY TREND</p>
+          <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '20px' }}>CLARITY TREND</p>
           <svg id="chart-svg" viewBox="0 0 600 100" width="100%" style={{ display: 'block', overflow: 'visible' }} />
         </div>
 

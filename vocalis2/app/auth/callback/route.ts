@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code        = searchParams.get('code')
   const token_hash  = searchParams.get('token_hash')
-  const type        = searchParams.get('type')
+  const type        = searchParams.get('type') as string | null
 
   const cookieStore = await cookies()
 
@@ -25,25 +25,25 @@ export async function GET(request: NextRequest) {
     }
   )
 
-  // Handle email confirmation via token_hash
+  // Handle email confirmation (token_hash method)
   if (token_hash && type) {
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       token_hash,
-      type: type as any
+      type: type as any,
     })
-    if (!error) {
+    if (!error && data.session) {
       return NextResponse.redirect(`${origin}/dashboard`)
     }
   }
 
-  // Handle code exchange (OAuth / magic link)
+  // Handle PKCE code exchange (newer Supabase flow)
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error && data.session) {
       return NextResponse.redirect(`${origin}/dashboard`)
     }
   }
 
-  // Fallback
-  return NextResponse.redirect(`${origin}/auth`)
+  // Failed — redirect back to auth with error
+  return NextResponse.redirect(`${origin}/auth?error=1`)
 }
