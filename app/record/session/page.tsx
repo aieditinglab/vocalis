@@ -55,6 +55,7 @@ export default function RecordSessionPage() {
 
   const mediaRef   = useRef<MediaRecorder | null>(null)
   const chunksRef  = useRef<Blob[]>([])
+  const recognitionResultCountRef = useRef(0)
   const timerRef   = useRef<NodeJS.Timeout | null>(null)
   const audioRef   = useRef<HTMLAudioElement | null>(null)
   const playTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -82,28 +83,38 @@ export default function RecordSessionPage() {
   }
 
   const startSpeechRecognition = () => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SR) return
-    fullTranscriptRef.current = ''
-    const r = new SR()
-    r.continuous = true; r.interimResults = true; r.lang = 'en-US'; r.maxAlternatives = 1
-    r.onresult = (e: any) => {
-      let final = ''
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) final += e.results[i][0].transcript + ' '
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  if (!SR) return
+  fullTranscriptRef.current = ''
+  recognitionResultCountRef.current = 0
+
+  const r = new SR()
+  r.continuous = true; r.interimResults = true; r.lang = 'en-US'; r.maxAlternatives = 1
+
+  r.onresult = (e: any) => {
+    let final = ''
+    for (let i = recognitionResultCountRef.current; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        final += e.results[i][0].transcript + ' '
+        recognitionResultCountRef.current = i + 1
       }
-      if (final) { fullTranscriptRef.current += final; setLiveTranscript(fullTranscriptRef.current) }
     }
-    r.onerror = () => {}
-    r.onend = () => {
-      if (mediaRef.current?.state === 'recording') { try { r.start() } catch {} }
+    if (final) {
+      fullTranscriptRef.current += final
+      setLiveTranscript(fullTranscriptRef.current)
     }
-    try { r.start(); recognitionRef.current = r } catch {}
   }
 
-  const stopSpeechRecognition = () => {
-    if (recognitionRef.current) { try { recognitionRef.current.stop() } catch {}; recognitionRef.current = null }
+  r.onerror = () => {}
+
+  r.onend = () => {
+    if (mediaRef.current?.state === 'recording') {
+      try { r.start() } catch {}
+    }
   }
+
+  try { r.start(); recognitionRef.current = r } catch {}
+}
 
   const startRec = async () => {
     setPermErr('')
