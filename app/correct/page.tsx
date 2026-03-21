@@ -35,7 +35,7 @@ export default function CorrectPage() {
     try {
       if (pending) {
         const sessionToSave = {
-          id: pending.id || `s_${Date.now()}`,
+          id: pending.id && pending.id.match(/^[0-9a-f-]{36}$/) ? pending.id : crypto.randomUUID(),
           date: pending.date || new Date().toISOString(),
           category: pending.category || 'General',
           prompt: pending.prompt || '',
