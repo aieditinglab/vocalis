@@ -25,7 +25,7 @@ function AuthPageInner() {
 
   const validate = () => {
     if (mode === 'signup' && !name.trim()) { setErr('Please enter your first name.'); return false }
-    if (!email.trim().includes('@')) { setErr('Please enter a valid email address.'); return false }
+    if (!email.trim().match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) { setErr('Please enter a valid email address.'); return false }
     if (pass.length < 6) { setErr('Password must be at least 6 characters.'); return false }
     return true
   }
@@ -51,8 +51,22 @@ function AuthPageInner() {
           setErr('This email already has an account. Switch to Log In below.')
         } else if (msg.includes('password')) {
           setErr('Password must be at least 6 characters.')
-        } else if (msg.includes('email')) {
-          setErr('Please enter a valid email address.')
+        if (error) {
+  const msg = error.message.toLowerCase()
+  if (msg.includes('already') || msg.includes('registered') || msg.includes('exists') || msg.includes('session')) {
+    setErr('This email already has an account. Switch to Log In below.')
+  } else if (msg.includes('password')) {
+    setErr('Password must be at least 6 characters.')
+  } else if (msg.includes('invalid') && msg.includes('email')) {
+    setErr('Please enter a valid email address.')
+  } else if (msg.includes('rate limit') || msg.includes('too many')) {
+    setErr('Too many attempts. Please wait a minute and try again.')
+  } else {
+    setErr(error.message)
+  }
+  setLoading(false)
+  return
+}
         } else {
           setErr(error.message)
         }
