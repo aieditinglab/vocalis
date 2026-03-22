@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { getPendingSession, clearPendingSession, saveSession, getSessions, addTokens, getUser } from '@/lib/db'
+import { getSessions, addTokens, getUser } from '@/lib/db'
 import { generateCoaching, detectPersonalBests, getCelebrationMessage } from '@/lib/coachingEngine'
 import type { Session } from '@/lib/types'
 
@@ -22,68 +22,48 @@ function tokensForSession(clarity: number, duration: number, fillerCount: number
 
 export default function LevelUpPage() {
   const router = useRouter()
-  const [session, setSession]       = useState<Session | null>(null)
-  const [prev, setPrev]             = useState<Session | null>(null)
-  const [tokensEarned, setTokens]   = useState(0)
-  const [bests, setBests]           = useState<any>(null)
+  const [session, setSession]         = useState<Session | null>(null)
+  const [prev, setPrev]               = useState<Session | null>(null)
+  const [tokensEarned, setTokens]     = useState(0)
+  const [bests, setBests]             = useState<any>(null)
   const [celebration, setCelebration] = useState('')
-  const [loading, setLoading]       = useState(true)
-  const [status, setStatus]         = useState('')
+  const [loading, setLoading]         = useState(true)
+  const [status, setStatus]           = useState('')
 
   useEffect(() => {
     const run = async () => {
-      setStatus('Verifying account...')
-      const user = await getUser()
-      if (!user) {
+      setStatus('Loading your session...')
+
+      // Get all sessions — most recent is index 0
+      const history = await getSessions()
+
+      if (history.length === 0) {
         setLoading(false)
         return
       }
 
-      const p = getPendingSession()
-      if (!p) { setLoading(false); return }
+      const latest = history[0]
+      const previousSessions = history.slice(1)
+      setPrev(previousSessions[0] || null)
 
-      setStatus('Loading your history...')
-      const history = await getSessions()
-      setPrev(history[0] || null)
+      // Generate coaching based on history
+      const coaching = generateCoaching(latest, previousSessions, 140, 160)
+      latest.feedback = coaching.length > 0 ? coaching : latest.feedback
 
-      const newSession: Session = {
-        id: `s_${Date.now()}`,
-        date: new Date().toISOString(),
-        category: (p as any).category || 'Unknown',
-        prompt: (p as any).prompt || '',
-        duration: (p as any).duration || 0,
-        fillerCount: (p as any).fillerCount || 0,
-        fillerWords: (p as any).fillerWords || [],
-        pace: (p as any).pace || 0,
-        clarityScore: (p as any).clarityScore || 0,
-        lengthStatus: (p as any).lengthStatus || 'in-range',
-        feedback: (p as any).feedback || [],
-        transcriptPreview: (p as any).transcriptPreview || '',
-      }
-
-      setStatus('Generating coaching...')
-      const coaching = generateCoaching(newSession, history, 140, 160)
-      newSession.feedback = coaching
-
-      const pb = detectPersonalBests(newSession, history)
+      const pb = detectPersonalBests(latest, previousSessions)
       setBests(pb)
-      setCelebration(getCelebrationMessage(newSession.clarityScore, pb, history.length === 0))
+      setCelebration(getCelebrationMessage(latest.clarityScore, pb, previousSessions.length === 0))
 
-      const earned = tokensForSession(newSession.clarityScore, newSession.duration, newSession.fillerCount)
+      const earned = tokensForSession(latest.clarityScore, latest.duration, latest.fillerCount)
       setTokens(earned)
-      newSession.tokensEarned = earned
 
-      setStatus('Saving session...')
-      const saved = await saveSession(newSession)
-      if (!saved) {
-        // Retry after 1 second
-        await new Promise(r => setTimeout(r, 1000))
-        await saveSession({ ...newSession, id: `s_${Date.now()}_r` })
+      // Add tokens (only if this is a fresh session — within last 2 minutes)
+      const sessionAge = Date.now() - new Date(latest.date).getTime()
+      if (sessionAge < 120000) {
+        await addTokens(earned)
       }
 
-      await addTokens(earned)
-      clearPendingSession()
-      setSession(newSession)
+      setSession(latest)
       setStatus('')
       setLoading(false)
     }
