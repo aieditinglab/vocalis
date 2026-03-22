@@ -9,18 +9,13 @@ export interface FeatureFlag {
 }
 
 export async function getIsAdmin(): Promise<boolean> {
-  const sb = createClient()
-  try {
-    const { data: { session } } = await sb.auth.getSession()
-    if (!session?.user) return false
-    const { data } = await sb
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .single()
-    return data?.is_admin === true
-  } catch { return false }
-}
+    const sb = createClient()
+    try {
+      const { data: { session } } = await sb.auth.getSession()
+      if (!session?.user) return false
+      return session.user.email === 'aieditinglab@gmail.com'
+    } catch { return false }
+  }
 
 export async function getFeatureFlags(): Promise<FeatureFlag[]> {
   const sb = createClient()
