@@ -29,16 +29,16 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
         {rightContent}
         {showApp && (
           <>
-            <Link href="/dashboard" className="btn btn-outline btn-sm nav-hide-mobile">Dashboard</Link>
-            <Link href="/practice"  className="btn btn-outline btn-sm nav-hide-mobile">Practice</Link>
-            <Link href="/games"     className="btn btn-outline btn-sm nav-hide-mobile">Games</Link>
-            <Link href="/avatar"    className="btn btn-outline btn-sm nav-hide-mobile">Avatar</Link>
-            <Link href="/settings"  className="btn btn-outline btn-sm nav-hide-mobile">Settings</Link>
-            <Link href="/record"    className="btn btn-primary btn-sm">🎤 New Rep</Link>
+            <Link href="/dashboard"    className="btn btn-outline btn-sm nav-hide-mobile">Dashboard</Link>
+            <Link href="/practice"     className="btn btn-outline btn-sm nav-hide-mobile">Practice</Link>
+            <Link href="/leaderboard"  className="btn btn-outline btn-sm nav-hide-mobile">Leaderboard</Link>
+            <Link href="/games"        className="btn btn-outline btn-sm nav-hide-mobile">Games</Link>
+            <Link href="/avatar"       className="btn btn-outline btn-sm nav-hide-mobile">Avatar</Link>
+            <Link href="/settings"     className="btn btn-outline btn-sm nav-hide-mobile">Settings</Link>
+            <Link href="/record"       className="btn btn-primary btn-sm">🎤 New Rep</Link>
             <div className="token-display" style={{ background: 'var(--card)', border: '1px solid var(--border-light)', borderRadius: '100px', padding: '6px 12px', fontSize: '13px', fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px' }}>
               🪙 {tokens}
             </div>
-            {/* Hamburger for mobile */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
               style={{ display: 'none', background: 'transparent', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '8px 10px', cursor: 'pointer', color: 'var(--text-primary)', fontSize: '18px' }}
@@ -69,11 +69,12 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
           display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 99,
         }}>
           {[
-            { href: '/dashboard', label: 'Dashboard' },
-            { href: '/practice',  label: 'Practice' },
-            { href: '/games',     label: 'Games' },
-            { href: '/avatar',    label: 'Avatar' },
-            { href: '/settings',  label: 'Settings' },
+            { href: '/dashboard',   label: 'Dashboard' },
+            { href: '/practice',    label: 'Practice' },
+            { href: '/leaderboard', label: 'Leaderboard' },
+            { href: '/games',       label: 'Games' },
+            { href: '/avatar',      label: 'Avatar' },
+            { href: '/settings',    label: 'Settings' },
           ].map(item => (
             <Link key={item.href} href={item.href}
               onClick={() => setMenuOpen(false)}
