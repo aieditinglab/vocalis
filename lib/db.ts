@@ -3,6 +3,8 @@ import { createClient } from './supabase'
 import type { Session, UserSettings, AvatarConfig, GameScore } from './types'
 import { DEFAULT_SETTINGS, DEFAULT_AVATAR } from './types'
 
+const ADMIN_EMAIL = 'aieditinglab@gmail.com'
+
 // ── AUTH ──────────────────────────────────────────────────────────────────
 
 export async function signUp(email: string, password: string, name: string) {
@@ -27,7 +29,6 @@ export async function signUp(email: string, password: string, name: string) {
     return { user: null, error: error.message }
   }
 
-  // Create profile record
   if (data.user) {
     try {
       await sb.from('profiles').upsert({
@@ -65,11 +66,8 @@ export async function signIn(email: string, password: string) {
 
 export async function signOut() {
   const sb = createClient()
-  // Full global sign out - clears all sessions
   await sb.auth.signOut({ scope: 'global' })
-  // Clear any local storage
   if (typeof window !== 'undefined') {
-    // Clear Supabase auth keys from localStorage
     Object.keys(localStorage).forEach(key => {
       if (key.startsWith('sb-') || key.includes('supabase')) {
         localStorage.removeItem(key)
@@ -131,13 +129,12 @@ export async function saveSession(s: Session): Promise<boolean> {
   const user = await getUser()
 
   if (!user) {
-    console.error('saveSession: no authenticated user — session check failed')
+    console.error('saveSession: no authenticated user')
     return false
   }
 
-  // Validate required fields
   const payload = {
-    id: s.id,
+    id: s.id && s.id.match(/^[0-9a-f-]{36}$/) ? s.id : crypto.randomUUID(),
     user_id: user.id,
     category: s.category || 'Unknown',
     prompt: s.prompt || '',
@@ -156,11 +153,10 @@ export async function saveSession(s: Session): Promise<boolean> {
     const { error } = await sb.from('sessions').insert(payload)
     if (error) {
       console.error('saveSession DB error:', error.message, error.code)
-      // If duplicate ID, try with new ID
       if (error.code === '23505') {
         const { error: e2 } = await sb.from('sessions').insert({
           ...payload,
-          id: `s_${Date.now()}_retry`
+          id: crypto.randomUUID()
         })
         return !e2
       }
@@ -238,6 +234,8 @@ export async function getTokenBalance(): Promise<number> {
   const sb = createClient()
   const user = await getUser()
   if (!user) return 0
+  // Admin gets unlimited tokens for testing
+  if (user.email === ADMIN_EMAIL) return 999999
   try {
     const { data } = await sb.from('token_balances').select('balance').eq('user_id', user.id).single()
     return data?.balance ?? 50
@@ -248,6 +246,8 @@ export async function addTokens(amount: number): Promise<number> {
   const sb = createClient()
   const user = await getUser()
   if (!user) return 0
+  // Admin tokens don't need to be stored
+  if (user.email === ADMIN_EMAIL) return 999999
   try {
     const current = await getTokenBalance()
     const newBalance = current + amount
@@ -262,6 +262,8 @@ export async function spendTokens(amount: number): Promise<boolean> {
   const sb = createClient()
   const user = await getUser()
   if (!user) return false
+  // Admin never runs out of tokens
+  if (user.email === ADMIN_EMAIL) return true
   try {
     const current = await getTokenBalance()
     if (current < amount) return false
@@ -311,6 +313,11 @@ export async function getPurchasedItems(): Promise<string[]> {
   const user = await getUser()
   const defaults = ['skin-lime','hair-0','hcol-dark','acc-0','out-dark','bg-dark']
   if (!user) return defaults
+  // Admin owns everything
+  if (user.email === ADMIN_EMAIL) {
+    const { AVATAR_SHOP_ITEMS } = await import('./types')
+    return AVATAR_SHOP_ITEMS.map(i => i.id)
+  }
   try {
     const { data } = await sb.from('avatars').select('purchased_items').eq('user_id', user.id).single()
     return data?.purchased_items || defaults
@@ -321,6 +328,8 @@ export async function purchaseItem(itemId: string): Promise<void> {
   const sb = createClient()
   const user = await getUser()
   if (!user) return
+  // Admin already owns everything
+  if (user.email === ADMIN_EMAIL) return
   try {
     const current = await getPurchasedItems()
     if (current.includes(itemId)) return
