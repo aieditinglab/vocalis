@@ -16,7 +16,6 @@ function AuthPageInner() {
   const [countdown, setCountdown] = useState(0)
   const router = useRouter()
 
-  // Countdown for resend button
   useEffect(() => {
     if (countdown <= 0) return
     const t = setInterval(() => setCountdown(c => c - 1), 1000)
@@ -49,24 +48,12 @@ function AuthPageInner() {
         const msg = error.message.toLowerCase()
         if (msg.includes('already') || msg.includes('registered') || msg.includes('exists') || msg.includes('session')) {
           setErr('This email already has an account. Switch to Log In below.')
-        } else if (msg.includes('password')) {
-          setErr('Password must be at least 6 characters.')
-        if (error) {
-  const msg = error.message.toLowerCase()
-  if (msg.includes('already') || msg.includes('registered') || msg.includes('exists') || msg.includes('session')) {
-    setErr('This email already has an account. Switch to Log In below.')
-  } else if (msg.includes('password')) {
-    setErr('Password must be at least 6 characters.')
-  } else if (msg.includes('invalid') && msg.includes('email')) {
-    setErr('Please enter a valid email address.')
-  } else if (msg.includes('rate limit') || msg.includes('too many')) {
-    setErr('Too many attempts. Please wait a minute and try again.')
-  } else {
-    setErr(error.message)
-  }
-  setLoading(false)
-  return
-}
+        } else if (msg.includes('password') || msg.includes('weak')) {
+          setErr('Please choose a stronger password (mix of letters, numbers, and symbols).')
+        } else if (msg.includes('invalid') && msg.includes('email')) {
+          setErr('Please enter a valid email address.')
+        } else if (msg.includes('rate limit') || msg.includes('too many')) {
+          setErr('Too many attempts. Please wait a minute and try again.')
         } else {
           setErr(error.message)
         }
@@ -74,7 +61,6 @@ function AuthPageInner() {
         return
       }
 
-      // Create profile
       if (data.user) {
         try {
           await sb.from('profiles').upsert({
@@ -88,12 +74,9 @@ function AuthPageInner() {
         } catch {}
       }
 
-      // Check if email confirmation needed
       if (data.session) {
-        // Already logged in (email confirm disabled)
         router.push('/dashboard')
       } else {
-        // Email confirmation required
         setPhase('verify')
         setCountdown(60)
       }
@@ -120,6 +103,8 @@ function AuthPageInner() {
           setErr('Wrong email or password. Please try again.')
         } else if (msg.includes('not confirmed') || msg.includes('confirm')) {
           setErr('Please verify your email first. Check your inbox.')
+        } else if (msg.includes('password') || msg.includes('weak')) {
+          setErr('Wrong email or password. Please try again.')
         } else {
           setErr(error.message)
         }
@@ -128,7 +113,6 @@ function AuthPageInner() {
       }
 
       if (data.session) {
-        // Hard redirect so proxy picks up the new session cookie
         window.location.href = '/dashboard'
       }
     } catch (e: any) {
@@ -166,7 +150,6 @@ function AuthPageInner() {
     setLoading(false)
   }
 
-  // ── VERIFY EMAIL SCREEN ──────────────────────────────────────────────────
   if (phase === 'verify') {
     return (
       <>
@@ -179,7 +162,6 @@ function AuthPageInner() {
             </h1>
             <p className="text-muted" style={{ fontSize: '16px', marginBottom: '8px' }}>We sent a confirmation link to</p>
             <p style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent)', marginBottom: '32px' }}>{email}</p>
-
             <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '24px', textAlign: 'left' }}>
               {[
                 { n: '1', t: 'Open the email from Vocalis (check spam too)' },
@@ -192,17 +174,13 @@ function AuthPageInner() {
                 </div>
               ))}
             </div>
-
             {err && <div style={{ background: 'rgba(255,48,84,.08)', border: '1px solid rgba(255,48,84,.2)', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', color: 'var(--hot)', marginBottom: '16px' }}>{err}</div>}
-
             <p className="text-muted" style={{ fontSize: '14px', marginBottom: '12px' }}>Didn&apos;t get it? Check your spam folder first.</p>
-
             <button className="btn btn-outline btn-full" onClick={resendEmail}
               disabled={countdown > 0 || loading}
               style={{ padding: '14px', opacity: countdown > 0 ? 0.5 : 1, cursor: countdown > 0 ? 'not-allowed' : 'pointer' }}>
               {loading ? 'Sending...' : countdown > 0 ? `Resend in ${countdown}s` : 'Resend Confirmation Email'}
             </button>
-
             <button onClick={() => { setPhase('form'); setErr('') }}
               style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '13px', cursor: 'pointer', marginTop: '14px', fontFamily: 'var(--font-body)', display: 'block', width: '100%', textAlign: 'center' }}>
               ← Back to sign up
@@ -213,7 +191,6 @@ function AuthPageInner() {
     )
   }
 
-  // ── FORM ──────────────────────────────────────────────────────────────────
   return (
     <>
       <Nav backHref="/" />
@@ -230,7 +207,7 @@ function AuthPageInner() {
 
           <div className="tab-bar anim-slide-up anim-d3" style={{ marginBottom: '28px' }}>
             <button className={`tab-btn ${mode === 'signup' ? 'active' : ''}`} onClick={() => { setMode('signup'); setErr('') }}>Sign Up</button>
-            <button className={`tab-btn ${mode === 'login' ? 'active' : ''}`}  onClick={() => { setMode('login');  setErr('') }}>Log In</button>
+            <button className={`tab-btn ${mode === 'login' ? 'active' : ''}`} onClick={() => { setMode('login'); setErr('') }}>Log In</button>
           </div>
 
           <div className="anim-slide-up anim-d4" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
