@@ -44,9 +44,6 @@ export async function signUp(email: string, password: string, name: string) {
 export async function signIn(email: string, password: string) {
   const sb = createClient()
 
-  // First clear any existing session
-  await sb.auth.signOut()
-
   const { data, error } = await sb.auth.signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
