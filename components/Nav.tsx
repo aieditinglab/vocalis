@@ -1,7 +1,8 @@
 'use client'
 import Link from 'next/link'
 import Logo from './Logo'
-import { getTokenBalance } from '@/lib/store'
+import { getTokenBalance } from '@/lib/db'
+import { getUser } from '@/lib/db'
 import { useEffect, useState } from 'react'
 
 interface NavProps {
@@ -13,10 +14,22 @@ interface NavProps {
 }
 
 export default function Nav({ backHref, backLabel = '← Back', rightContent, showAuth, showApp }: NavProps) {
-  const [tokens, setTokens] = useState(0)
+  const [tokens, setTokens] = useState<number | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
-  useEffect(() => { setTokens(getTokenBalance()) }, [])
+  useEffect(() => {
+    if (!showApp) return
+    const load = async () => {
+      const [bal, user] = await Promise.all([getTokenBalance(), getUser()])
+      setTokens(bal)
+      if (user?.email === 'aieditinglab@gmail.com') setIsAdmin(true)
+    }
+    load()
+    // Refresh tokens every 30 seconds
+    const interval = setInterval(load, 30000)
+    return () => clearInterval(interval)
+  }, [showApp])
 
   return (
     <nav className="nav" style={{ position: 'sticky', top: 0, zIndex: 100 }}>
@@ -29,15 +42,25 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
         {rightContent}
         {showApp && (
           <>
-            <Link href="/dashboard"    className="btn btn-outline btn-sm nav-hide-mobile">Dashboard</Link>
-            <Link href="/practice"     className="btn btn-outline btn-sm nav-hide-mobile">Practice</Link>
-            <Link href="/leaderboard"  className="btn btn-outline btn-sm nav-hide-mobile">Leaderboard</Link>
-            <Link href="/games"        className="btn btn-outline btn-sm nav-hide-mobile">Games</Link>
-            <Link href="/avatar"       className="btn btn-outline btn-sm nav-hide-mobile">Avatar</Link>
-            <Link href="/settings"     className="btn btn-outline btn-sm nav-hide-mobile">Settings</Link>
-            <Link href="/record"       className="btn btn-primary btn-sm">🎤 New Rep</Link>
-            <div className="token-display" style={{ background: 'var(--card)', border: '1px solid var(--border-light)', borderRadius: '100px', padding: '6px 12px', fontSize: '13px', fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              🪙 {tokens}
+            <Link href="/dashboard"   className="btn btn-outline btn-sm nav-hide-mobile">Dashboard</Link>
+            <Link href="/practice"    className="btn btn-outline btn-sm nav-hide-mobile">Practice</Link>
+            <Link href="/leaderboard" className="btn btn-outline btn-sm nav-hide-mobile">Leaderboard</Link>
+            <Link href="/games"       className="btn btn-outline btn-sm nav-hide-mobile">Games</Link>
+            <Link href="/avatar"      className="btn btn-outline btn-sm nav-hide-mobile">Avatar</Link>
+            <Link href="/settings"    className="btn btn-outline btn-sm nav-hide-mobile">Settings</Link>
+            {isAdmin && (
+              <Link href="/admin" className="btn btn-outline btn-sm nav-hide-mobile"
+                style={{ borderColor: 'rgba(170,255,0,.3)', color: 'var(--accent)' }}>
+                ⚙️ Admin
+              </Link>
+            )}
+            <Link href="/record" className="btn btn-primary btn-sm">🎤 New Rep</Link>
+            <div style={{
+              background: 'var(--card)', border: '1px solid var(--border-light)',
+              borderRadius: '100px', padding: '6px 12px', fontSize: '13px',
+              fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px'
+            }}>
+              🪙 {tokens === null ? '...' : tokens >= 999999 ? '∞' : tokens}
             </div>
             <button
               onClick={() => setMenuOpen(!menuOpen)}
@@ -60,7 +83,7 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
         )}
       </div>
 
-      {/* Mobile dropdown menu */}
+      {/* Mobile dropdown */}
       {showApp && menuOpen && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0,
@@ -75,6 +98,7 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
             { href: '/games',       label: 'Games' },
             { href: '/avatar',      label: 'Avatar' },
             { href: '/settings',    label: 'Settings' },
+            ...(isAdmin ? [{ href: '/admin', label: '⚙️ Admin' }] : []),
           ].map(item => (
             <Link key={item.href} href={item.href}
               onClick={() => setMenuOpen(false)}
