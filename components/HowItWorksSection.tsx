@@ -14,8 +14,6 @@ const SCENES = [
   { id: 'outro',      start: 43000, end: 48000 },
 ]
 
-// ONE continuous script — sent as a single ElevenLabs request.
-// No gaps, no timing drift, no overlaps. Just one clean audio track.
 const FULL_SCRIPT = `
 Meet Vocalis. AI-powered communication coaching, built for the next generation of leaders.
 
@@ -44,20 +42,139 @@ Train your voice. Own the room.
 
 const PROMPT_TEXT = '"Describe a challenge you\'ve overcome, and what it taught you about yourself."'
 const FEEDBACK_ITEMS = [
-  { icon: '🎯', label: 'Clarity Score',  score: 92, delta: '+7 from last session', color: '#c8f53a', text: 'Strong opening — your main point landed in the first two sentences. Avoid trailing off at the end of key ideas.' },
-  { icon: '⚡', label: 'Filler Words',   score: 88, delta: '2 detected  ↓ from 9',  color: '#60a5fa', text: '"Um" appeared twice near the start. Replace with a confident pause — silence reads as authority.' },
-  { icon: '🔥', label: 'Confidence',     score: 95, delta: 'Personal best ↑',        color: '#f97316', text: 'Vocal tone stayed steady throughout. No hesitation on key phrases. Your energy carried well.' },
+  { icon:'🎯', label:'Clarity Score',  score:92, delta:'+7 from last session', color:'#c8f53a', text:'Strong opening — your main point landed in the first two sentences. Avoid trailing off at the end of key ideas.' },
+  { icon:'⚡', label:'Filler Words',   score:88, delta:'2 detected  ↓ from 9',  color:'#60a5fa', text:'"Um" appeared twice near the start. Replace with a confident pause — silence reads as authority.' },
+  { icon:'🔥', label:'Confidence',     score:95, delta:'Personal best ↑',        color:'#f97316', text:'Vocal tone stayed steady throughout. No hesitation on key phrases. Your energy carried well.' },
 ]
 const PROGRESS_DATA = [72, 68, 78, 85, 92]
 const STATS = [
-  { num: '68%', text: 'of teens struggle to speak confidently in front of others' },
-  { num: '#1',  text: 'skill employers want — communication — never formally taught' },
-  { num: '0',   text: 'AI coaches existed for this specific problem. Until now.' },
+  { num:'68%', text:'of teens struggle to speak confidently in front of others' },
+  { num:'#1',  text:'skill employers want — communication — never formally taught' },
+  { num:'0',   text:'AI coaches existed for this specific problem. Until now.' },
 ]
+
+// ─── Background Music via Web Audio API ───────────────────────────────────────
+// Ambient electronic loop: slow pad + kick + hi-hat + bass. ~110 BPM, A minor.
+
+function createDemoMusic(ctx: AudioContext): () => void {
+  const master = ctx.createGain()
+  master.gain.setValueAtTime(0, ctx.currentTime)
+  master.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 3) // fade in over 3s
+  master.connect(ctx.destination)
+
+  const bpm = 110
+  const beat = 60 / bpm        // seconds per beat
+  const bar  = beat * 4
+
+  // ── Ambient pad ──────────────────────────────────────────────────────────────
+  // Two detuned sawtooths run through a low-pass filter → dreamy, dark tone
+  function playPad(freq: number, startTime: number, duration: number, gain: number) {
+    const osc1 = ctx.createOscillator()
+    const osc2 = ctx.createOscillator()
+    const filter = ctx.createBiquadFilter()
+    const env    = ctx.createGain()
+
+    osc1.type = 'sawtooth'; osc1.frequency.value = freq
+    osc2.type = 'sawtooth'; osc2.frequency.value = freq * 1.006 // slight detune
+
+    filter.type = 'lowpass'; filter.frequency.value = 800; filter.Q.value = 1.5
+
+    env.gain.setValueAtTime(0, startTime)
+    env.gain.linearRampToValueAtTime(gain, startTime + 0.8)
+    env.gain.setValueAtTime(gain, startTime + duration - 1.2)
+    env.gain.linearRampToValueAtTime(0, startTime + duration)
+
+    osc1.connect(filter); osc2.connect(filter)
+    filter.connect(env); env.connect(master)
+    osc1.start(startTime); osc2.start(startTime)
+    osc1.stop(startTime + duration); osc2.stop(startTime + duration)
+  }
+
+  // A minor chord progression: Am → F → C → G (repeating)
+  const chords = [220, 174.61, 130.81, 196] // A2, F2, C2, G2
+  const totalBars = Math.ceil(TOTAL_MS / 1000 / bar) + 2
+
+  for (let i = 0; i < totalBars; i++) {
+    const chordFreq = chords[i % chords.length]
+    const t = ctx.currentTime + i * bar
+    playPad(chordFreq,        t, bar + 0.2, 0.06)
+    playPad(chordFreq * 2,    t, bar + 0.2, 0.04)
+    playPad(chordFreq * 2.97, t, bar + 0.2, 0.03) // approximate 5th
+  }
+
+  // ── Kick drum ────────────────────────────────────────────────────────────────
+  function kick(t: number) {
+    const osc = ctx.createOscillator()
+    const env = ctx.createGain()
+    osc.frequency.setValueAtTime(150, t)
+    osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.4)
+    env.gain.setValueAtTime(0.5, t)
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.4)
+    osc.connect(env); env.connect(master)
+    osc.start(t); osc.stop(t + 0.4)
+  }
+
+  // ── Hi-hat ───────────────────────────────────────────────────────────────────
+  function hihat(t: number, vol = 0.08) {
+    const bufSize = ctx.sampleRate * 0.05
+    const buf     = ctx.createBuffer(1, bufSize, ctx.sampleRate)
+    const data    = buf.getChannelData(0)
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
+    const src    = ctx.createBufferSource()
+    const filter = ctx.createBiquadFilter()
+    const env    = ctx.createGain()
+    src.buffer   = buf
+    filter.type  = 'highpass'; filter.frequency.value = 7000
+    env.gain.setValueAtTime(vol, t)
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.05)
+    src.connect(filter); filter.connect(env); env.connect(master)
+    src.start(t); src.stop(t + 0.05)
+  }
+
+  // ── Bass line ────────────────────────────────────────────────────────────────
+  function bass(freq: number, t: number, dur: number) {
+    const osc = ctx.createOscillator()
+    const env = ctx.createGain()
+    osc.type = 'triangle'; osc.frequency.value = freq
+    env.gain.setValueAtTime(0, t)
+    env.gain.linearRampToValueAtTime(0.12, t + 0.02)
+    env.gain.setValueAtTime(0.12, t + dur - 0.05)
+    env.gain.linearRampToValueAtTime(0, t + dur)
+    osc.connect(env); env.connect(master)
+    osc.start(t); osc.stop(t + dur)
+  }
+
+  const bassNotes = [55, 43.65, 32.7, 49] // A1, F1, C1, G1
+
+  // Schedule drums + bass for entire duration
+  for (let i = 0; i < totalBars; i++) {
+    const barStart   = ctx.currentTime + i * bar
+    const bassFreq   = bassNotes[i % bassNotes.length]
+    const nextBassF  = bassNotes[(i+1) % bassNotes.length]
+
+    // Kick: beat 1 and beat 3
+    kick(barStart)
+    kick(barStart + beat * 2)
+
+    // Hi-hats: every half beat
+    for (let h = 0; h < 8; h++) {
+      hihat(barStart + h * (beat / 2), h % 2 === 0 ? 0.09 : 0.05)
+    }
+
+    // Bass: two notes per bar
+    bass(bassFreq,  barStart,           beat * 2)
+    bass(nextBassF, barStart + beat * 2, beat * 2)
+  }
+
+  // Return a stop function that fades out
+  return () => {
+    master.gain.linearRampToValueAtTime(0, ctx.currentTime + 2)
+  }
+}
 
 // ─── Scene Components ─────────────────────────────────────────────────────────
 
-function SceneBrand({ v }: { v: boolean }) {
+function SceneBrand({ v }: { v:boolean }) {
   return (
     <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
       <div style={{ display:'flex',alignItems:'center',gap:16,transform:v?'scale(1)':'scale(0.8)',transition:'transform 0.6s cubic-bezier(0.34,1.56,0.64,1)',marginBottom:20 }}>
@@ -82,7 +199,7 @@ function SceneProblem({ v, e }: { v:boolean; e:number }) {
       <div style={{ fontSize:10,fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase',marginBottom:20 }}>The Problem</div>
       <div style={{ display:'flex',flexDirection:'column',gap:14 }}>
         {STATS.map((s,i)=>{
-          const show = e > i * 1800
+          const show=e>i*1800
           return (
             <div key={i} style={{ display:'flex',alignItems:'flex-start',gap:16,opacity:show?1:0,transform:show?'translateX(0)':'translateX(-24px)',transition:'all 0.5s ease' }}>
               <div style={{ minWidth:56,fontSize:'clamp(24px,3.5vw,36px)',fontWeight:900,color:'#c8f53a',lineHeight:1,letterSpacing:-2,flexShrink:0 }}>{s.num}</div>
@@ -100,16 +217,15 @@ function SceneProblem({ v, e }: { v:boolean; e:number }) {
 }
 
 function ScenePractice({ v, e }: { v:boolean; e:number }) {
-  const promptVisible  = e > 400
-  const charCount      = Math.floor(Math.max(0, Math.min((e-600)/2800,1)) * PROMPT_TEXT.length)
-  const btnVisible     = e > 2800
-  const isRecording    = e > 3800
-  const recMs          = Math.max(0, e-3800)
-  const showTranscript = e > 5400
-  const WORDS          = ['I','think','the','biggest','challenge','I','ever','faced','was','learning','to','speak','up','without','second-guessing','myself','every','single','time...']
-  const wordCount      = showTranscript ? Math.min(Math.floor((e-5400)/170), WORDS.length) : 0
-  const t              = Date.now()/1000
-
+  const promptVisible=e>400
+  const charCount=Math.floor(Math.max(0,Math.min((e-600)/2800,1))*PROMPT_TEXT.length)
+  const btnVisible=e>2800
+  const isRecording=e>3800
+  const recMs=Math.max(0,e-3800)
+  const showTranscript=e>5400
+  const WORDS=['I','think','the','biggest','challenge','I','ever','faced','was','learning','to','speak','up','without','second-guessing','myself','every','single','time...']
+  const wordCount=showTranscript?Math.min(Math.floor((e-5400)/170),WORDS.length):0
+  const t=Date.now()/1000
   return (
     <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(16px,4%,52px)',opacity:v?1:0,transition:'opacity 0.5s ease',gap:10 }}>
       <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:2 }}>
@@ -118,18 +234,16 @@ function ScenePractice({ v, e }: { v:boolean; e:number }) {
         </div>
         <span style={{ fontSize:10,fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>Record Your Rep</span>
       </div>
-
       <div style={{ background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.09)',borderRadius:12,padding:'clamp(12px,2%,18px)',opacity:promptVisible?1:0,transform:promptVisible?'translateY(0)':'translateY(16px)',transition:'all 0.4s ease' }}>
         <div style={{ fontSize:9,fontWeight:700,color:'rgba(255,255,255,0.25)',letterSpacing:4,textTransform:'uppercase',marginBottom:8 }}>Today's Prompt</div>
         <div style={{ fontSize:'clamp(11px,1.6vw,14px)',fontWeight:600,color:'#fff',lineHeight:1.6 }}>
           {PROMPT_TEXT.slice(0,charCount)}<span style={{ color:'#c8f53a',opacity:!isRecording&&Math.floor(Date.now()/500)%2===0?1:0 }}>|</span>
         </div>
       </div>
-
       <div style={{ background:isRecording?'rgba(200,245,58,0.04)':'rgba(255,255,255,0.03)',border:isRecording?'1px solid rgba(200,245,58,0.2)':'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'clamp(10px,1.8%,16px)',opacity:btnVisible?1:0,transition:'all 0.4s ease' }}>
         <div style={{ display:'flex',alignItems:'center',gap:2.5,height:34,marginBottom:10 }}>
           {Array.from({length:50}).map((_,i)=>{
-            const h = 5 + (isRecording?26:3) * Math.abs(Math.sin(t*4+i*0.65))
+            const h=5+(isRecording?26:3)*Math.abs(Math.sin(t*4+i*0.65))
             return <div key={i} style={{ flex:1,height:h,borderRadius:2,background:isRecording?'#c8f53a':'rgba(200,245,58,0.15)',transition:'height 0.07s' }}/>
           })}
         </div>
@@ -146,7 +260,6 @@ function ScenePractice({ v, e }: { v:boolean; e:number }) {
           {isRecording&&<span style={{ fontSize:15,fontWeight:800,color:'rgba(255,255,255,0.2)',fontVariantNumeric:'tabular-nums' }}>{String(Math.floor(recMs/1000)).padStart(2,'0')}:{String(Math.floor((recMs%1000)/10)).padStart(2,'0')}</span>}
         </div>
       </div>
-
       {showTranscript&&(
         <div style={{ background:'rgba(200,245,58,0.03)',border:'1px solid rgba(200,245,58,0.1)',borderRadius:10,padding:'10px 13px' }}>
           <div style={{ fontSize:9,fontWeight:700,color:'rgba(200,245,58,0.5)',letterSpacing:4,textTransform:'uppercase',marginBottom:6 }}>Live Transcript</div>
@@ -160,8 +273,8 @@ function ScenePractice({ v, e }: { v:boolean; e:number }) {
 }
 
 function SceneProcessing({ v, e }: { v:boolean; e:number }) {
-  const t = Date.now()/1000
-  const steps = [
+  const t=Date.now()/1000
+  const steps=[
     { label:'Transcribing audio',         done:e>700  },
     { label:'Analyzing speech patterns',  done:e>1500 },
     { label:'Generating coaching report', done:e>2400 },
@@ -213,9 +326,9 @@ function SceneFeedback({ v, e }: { v:boolean; e:number }) {
       </div>
       <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
         {FEEDBACK_ITEMS.map((item,i)=>{
-          const delay  = i*1800
-          const show   = e>delay
-          const barPct = show?Math.min(Math.max(0,(e-delay-500)/1000),1)*item.score:0
+          const delay=i*1800
+          const show=e>delay
+          const barPct=show?Math.min(Math.max(0,(e-delay-500)/1000),1)*item.score:0
           return (
             <div key={item.label} style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'clamp(10px,1.6%,15px) clamp(12px,2%,18px)',opacity:show?1:0,transform:show?'translateY(0)':'translateY(14px)',transition:`opacity 0.4s ease ${delay*0.001}s,transform 0.4s ease ${delay*0.001}s` }}>
               <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:7,gap:10 }}>
@@ -241,9 +354,9 @@ function SceneFeedback({ v, e }: { v:boolean; e:number }) {
 }
 
 function SceneProgress({ v, e }: { v:boolean; e:number }) {
-  const rp  = Math.min(e/2200,1)
-  const num = Math.round(65+rp*27)
-  const C   = 2*Math.PI*72
+  const rp=Math.min(e/2200,1)
+  const num=Math.round(65+rp*27)
+  const C=2*Math.PI*72
   return (
     <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(16px,4%,52px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
       <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:16 }}>
@@ -335,7 +448,9 @@ export default function HowItWorksSection() {
   const sectionRef   = useRef<HTMLDivElement>(null)
   const rafRef       = useRef<number>(0)
   const startTimeRef = useRef<number>(0)
-  const audioRef     = useRef<HTMLAudioElement|null>(null)  // ONE audio track
+  const audioRef     = useRef<HTMLAudioElement|null>(null)
+  const audioCtxRef  = useRef<AudioContext|null>(null)
+  const stopMusicRef = useRef<(()=>void)|null>(null)
 
   const [started,      setStarted]      = useState(false)
   const [audioReady,   setAudioReady]   = useState(false)
@@ -344,90 +459,88 @@ export default function HowItWorksSection() {
   const [sceneElapsed, setSceneElapsed] = useState(0)
   const [,             forceRender]     = useState(0)
 
-  // Fetch the ENTIRE script as one single audio file — no gaps possible
-  useEffect(() => {
-    let dead = false
+  // Pre-fetch single ElevenLabs audio clip
+  useEffect(()=>{
+    let dead=false
     async function go() {
       try {
-        const r = await fetch('/api/narrate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: FULL_SCRIPT }),
-        })
+        const r=await fetch('/api/narrate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:FULL_SCRIPT})})
         if (!r.ok) return
-        const blob = await r.blob()
-        const a = new Audio(URL.createObjectURL(blob))
-        a.preload = 'auto'
-        if (!dead) { audioRef.current = a; setAudioReady(true) }
+        const blob=await r.blob()
+        const a=new Audio(URL.createObjectURL(blob))
+        a.preload='auto'
+        if (!dead){audioRef.current=a;setAudioReady(true)}
       } catch {}
     }
     go()
-    return () => { dead = true }
-  }, [])
+    return ()=>{dead=true}
+  },[])
 
-  const rafTick = useCallback(() => {
-    const ms = Math.min(Date.now() - startTimeRef.current, TOTAL_MS)
+  const rafTick=useCallback(()=>{
+    const ms=Math.min(Date.now()-startTimeRef.current,TOTAL_MS)
     setElapsed(ms)
-    const s = SCENES.find(x => ms >= x.start && ms < x.end) ?? SCENES[SCENES.length-1]
-    setSceneId(s.id); setSceneElapsed(ms - s.start); forceRender(n => n+1)
-    if (ms < TOTAL_MS) rafRef.current = requestAnimationFrame(rafTick)
-  }, [])
+    const s=SCENES.find(x=>ms>=x.start&&ms<x.end)??SCENES[SCENES.length-1]
+    setSceneId(s.id); setSceneElapsed(ms-s.start); forceRender(n=>n+1)
+    if (ms<TOTAL_MS) rafRef.current=requestAnimationFrame(rafTick)
+    else if (stopMusicRef.current) stopMusicRef.current() // fade music out at end
+  },[])
 
-  const startDemo = useCallback(() => {
+  const startDemo=useCallback(()=>{
     cancelAnimationFrame(rafRef.current)
     window.speechSynthesis?.cancel()
+    if (audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0}
 
-    // Reset audio
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0 }
+    // Stop previous music
+    if (stopMusicRef.current) stopMusicRef.current()
+    if (audioCtxRef.current) audioCtxRef.current.close()
 
-    startTimeRef.current = Date.now()
+    startTimeRef.current=Date.now()
     setElapsed(0); setSceneId('brand'); setSceneElapsed(0); setStarted(true)
-    rafRef.current = requestAnimationFrame(rafTick)
+    rafRef.current=requestAnimationFrame(rafTick)
 
-    // Play the single audio track
-    if (audioReady && audioRef.current) {
-      audioRef.current.play().catch(() => {})
+    // Start background music
+    try {
+      const ctx=new (window.AudioContext||(window as any).webkitAudioContext)()
+      audioCtxRef.current=ctx
+      stopMusicRef.current=createDemoMusic(ctx)
+    } catch {}
+
+    // Play voice
+    if (audioReady&&audioRef.current) {
+      audioRef.current.play().catch(()=>{})
     } else if ('speechSynthesis' in window) {
-      // Web Speech fallback — single utterance, no gaps
-      const u = new SpeechSynthesisUtterance(FULL_SCRIPT)
-      u.rate = 0.9; u.pitch = 1.05; u.volume = 1.0
-      const trySpeak = () => {
-        const voices = window.speechSynthesis.getVoices()
-        const pref = voices.find(v => v.lang === 'en-US' && !v.localService)
-          ?? voices.find(v => v.lang.startsWith('en')) ?? voices[0]
-        if (pref) u.voice = pref
+      const u=new SpeechSynthesisUtterance(FULL_SCRIPT)
+      u.rate=0.9; u.pitch=1.05; u.volume=1.0
+      const trySpeak=()=>{
+        const voices=window.speechSynthesis.getVoices()
+        const pref=voices.find(v=>v.lang==='en-US'&&!v.localService)??voices.find(v=>v.lang.startsWith('en'))??voices[0]
+        if (pref) u.voice=pref
         window.speechSynthesis.speak(u)
       }
-      if (window.speechSynthesis.getVoices().length > 0) trySpeak()
-      else { window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.onvoiceschanged = null; trySpeak() } }
+      if (window.speechSynthesis.getVoices().length>0) trySpeak()
+      else{window.speechSynthesis.onvoiceschanged=()=>{window.speechSynthesis.onvoiceschanged=null;trySpeak()}}
     }
-  }, [rafTick, audioReady])
+  },[rafTick,audioReady])
 
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting && !started) startDemo() },
-      { threshold: 0.5 }
-    )
+  useEffect(()=>{
+    const obs=new IntersectionObserver(([e])=>{if(e.isIntersecting&&!started)startDemo()},{threshold:0.5})
     if (sectionRef.current) obs.observe(sectionRef.current)
-    return () => obs.disconnect()
-  }, [started, startDemo])
+    return ()=>obs.disconnect()
+  },[started,startDemo])
 
-  useEffect(() => () => {
+  useEffect(()=>()=>{
     cancelAnimationFrame(rafRef.current)
     if (audioRef.current) audioRef.current.pause()
+    if (stopMusicRef.current) stopMusicRef.current()
+    if (audioCtxRef.current) audioCtxRef.current.close()
     window.speechSynthesis?.cancel()
-  }, [])
+  },[])
 
-  const STEP_LABELS = [
-    { id:'practice', label:'① Record' },
-    { id:'feedback',  label:'② Get feedback' },
-    { id:'progress',  label:'③ Track progress' },
-  ]
+  const STEP_LABELS=[{id:'practice',label:'① Record'},{id:'feedback',label:'② Get feedback'},{id:'progress',label:'③ Track progress'}]
 
   return (
     <section id="how-it-works" ref={sectionRef} style={{ position:'relative',padding:'clamp(64px,8vw,100px) clamp(20px,5vw,40px)',background:'#0a0a0a',overflow:'hidden' }}>
       <div style={{ position:'absolute',left:'50%',top:'25%',transform:'translate(-50%,-50%)',width:'80vw',height:'80vw',maxWidth:900,maxHeight:900,borderRadius:'50%',background:'radial-gradient(circle,rgba(200,245,58,0.04) 0%,transparent 65%)',pointerEvents:'none' }}/>
-
       <div style={{ maxWidth:1020,margin:'0 auto',position:'relative',zIndex:1 }}>
         <div style={{ marginBottom:36,display:'flex',alignItems:'flex-end',justifyContent:'space-between',flexWrap:'wrap',gap:16 }}>
           <div>
@@ -447,8 +560,6 @@ export default function HowItWorksSection() {
 
         <div style={{ position:'relative',borderRadius:18,overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)',boxShadow:'0 0 80px rgba(200,245,58,0.06),0 40px 80px rgba(0,0,0,0.75)',background:'#0d0d0d',aspectRatio:'16/9',minHeight:260 }}>
           <div style={{ position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(200,245,58,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(200,245,58,0.015) 1px,transparent 1px)',backgroundSize:'52px 52px' }}/>
-
-          {/* Browser chrome */}
           <div style={{ position:'absolute',top:0,left:0,right:0,height:40,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',padding:'0 14px',gap:9,zIndex:10 }}>
             <div style={{ display:'flex',gap:5 }}>{['#ff5f57','#ffbd2e','#28ca41'].map(c=><div key={c} style={{ width:8,height:8,borderRadius:'50%',background:c,opacity:0.65 }}/>)}</div>
             <div style={{ flex:1,display:'flex',justifyContent:'center' }}>
@@ -483,7 +594,7 @@ export default function HowItWorksSection() {
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21"/></svg>
               </div>
               <span style={{ fontSize:14,color:'rgba(255,255,255,0.6)',fontWeight:600,marginBottom:5 }}>Watch the demo</span>
-              <span style={{ fontSize:11,color:'rgba(255,255,255,0.22)' }}>{audioReady?'48 seconds · ElevenLabs AI voice':'48 seconds · loading voice...'}</span>
+              <span style={{ fontSize:11,color:'rgba(255,255,255,0.22)' }}>{audioReady?'48 seconds · AI voice + music':'48 seconds · loading...'}</span>
             </div>
           )}
         </div>
@@ -501,7 +612,7 @@ export default function HowItWorksSection() {
               </div>
             ))}
           </div>
-          <span style={{ fontSize:10,color:'rgba(255,255,255,0.17)',fontWeight:500 }}>{audioReady?'🎙 ElevenLabs AI voice':'48s walkthrough'}</span>
+          <span style={{ fontSize:10,color:'rgba(255,255,255,0.17)',fontWeight:500 }}>{audioReady?'🎙 AI voice  🎵 music':'48s walkthrough'}</span>
         </div>
       </div>
     </section>
