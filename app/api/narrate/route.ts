@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 // Your custom ElevenLabs voice
-const VOICE_ID = 'qJ9LrPtW54RPProFnNFn'
+const VOICE_ID = 'RpeT9oPl9SL6BXqT0GOI'
 
 export async function POST(req: NextRequest) {
   const { text } = await req.json()
