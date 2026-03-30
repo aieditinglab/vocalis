@@ -14,29 +14,23 @@ const SCENES = [
   { id: 'outro',      start: 43000, end: 48000 },
 ]
 
+// Brief, punchy script — matches what's on screen without over-explaining
 const FULL_SCRIPT = `
-Meet Vocalis. AI-powered communication coaching, built for the next generation of leaders.
+Vocalis. AI communication coaching for the next generation.
 
-Here's the reality. Most teens are never taught how to speak with confidence. 
-Communication is the number one skill employers look for — and it's never formally taught in school. 
-Until now.
+Most teens are never taught to speak with confidence. That ends here.
 
-Here's how a single Vocalis session works. You get a real-world prompt — 
-the kind you'd face in a job interview, a class presentation, or a leadership role. 
-You hit record, and you speak naturally. 
-Vocalis listens to every single word in real time, capturing your clarity, your pace, and every filler word as you go. 
-As you speak, your words appear as a live transcript on screen.
+You get a prompt. You hit record. You speak.
+Vocalis listens — catching every word, every pause, every filler in real time.
 
-When you stop, the analysis happens instantly.
+The moment you stop, the AI goes to work.
 
-You get a full coaching report — three scores across Clarity, Filler Words, and Confidence. 
-Each score comes with specific, written feedback. 
-Not just a number — a reason, and exactly what to work on next time.
+Three scores. Clarity, filler words, confidence.
+Real feedback. Not just a number — a reason, and what to fix.
 
-And every session is tracked. You can watch your clarity score climb, rep by rep. 
-Your streak grows. You earn tokens. You level up.
+Every rep is tracked. Watch yourself improve over time.
+Build your streak. Earn tokens. Level up.
 
-This is what deliberate practice looks like for communication. 
 Train your voice. Own the room.
 `.trim()
 
@@ -49,126 +43,146 @@ const FEEDBACK_ITEMS = [
 const PROGRESS_DATA = [72, 68, 78, 85, 92]
 const STATS = [
   { num:'68%', text:'of teens struggle to speak confidently in front of others' },
-  { num:'#1',  text:'skill employers want — communication — never formally taught' },
-  { num:'0',   text:'AI coaches existed for this specific problem. Until now.' },
+  { num:'#1',  text:'skill employers want — never formally taught in school' },
+  { num:'0',   text:'AI coaches built for this problem. Until now.' },
 ]
 
-// ─── Background Music via Web Audio API ───────────────────────────────────────
-// Ambient electronic loop: slow pad + kick + hi-hat + bass. ~110 BPM, A minor.
+// ─── Lo-fi ambient music via Web Audio ────────────────────────────────────────
+// Slow, warm, minimal. ~85 BPM. A minor. Inspired by chill study/demo beats.
 
 function createDemoMusic(ctx: AudioContext): () => void {
   const master = ctx.createGain()
   master.gain.setValueAtTime(0, ctx.currentTime)
-  master.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 3) // fade in over 3s
+  master.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 4)
   master.connect(ctx.destination)
 
-  const bpm = 110
-  const beat = 60 / bpm        // seconds per beat
+  const bpm  = 85
+  const beat = 60 / bpm
   const bar  = beat * 4
+  const totalBars = Math.ceil((TOTAL_MS / 1000) / bar) + 2
 
-  // ── Ambient pad ──────────────────────────────────────────────────────────────
-  // Two detuned sawtooths run through a low-pass filter → dreamy, dark tone
-  function playPad(freq: number, startTime: number, duration: number, gain: number) {
-    const osc1 = ctx.createOscillator()
-    const osc2 = ctx.createOscillator()
-    const filter = ctx.createBiquadFilter()
-    const env    = ctx.createGain()
-
-    osc1.type = 'sawtooth'; osc1.frequency.value = freq
-    osc2.type = 'sawtooth'; osc2.frequency.value = freq * 1.006 // slight detune
-
-    filter.type = 'lowpass'; filter.frequency.value = 800; filter.Q.value = 1.5
-
-    env.gain.setValueAtTime(0, startTime)
-    env.gain.linearRampToValueAtTime(gain, startTime + 0.8)
-    env.gain.setValueAtTime(gain, startTime + duration - 1.2)
-    env.gain.linearRampToValueAtTime(0, startTime + duration)
-
-    osc1.connect(filter); osc2.connect(filter)
-    filter.connect(env); env.connect(master)
-    osc1.start(startTime); osc2.start(startTime)
-    osc1.stop(startTime + duration); osc2.stop(startTime + duration)
+  // ── Warm pad (triangle + sine, low-pass filtered) ──────────────────────────
+  function pad(freq: number, start: number, dur: number, vol: number) {
+    [freq, freq * 1.003, freq * 1.5].forEach((f, i) => {
+      const osc = ctx.createOscillator()
+      const filt = ctx.createBiquadFilter()
+      const env  = ctx.createGain()
+      osc.type = i === 2 ? 'sine' : 'triangle'
+      osc.frequency.value = f
+      filt.type = 'lowpass'; filt.frequency.value = 600; filt.Q.value = 0.8
+      env.gain.setValueAtTime(0, start)
+      env.gain.linearRampToValueAtTime(vol * (i === 2 ? 0.4 : 1), start + 1.2)
+      env.gain.setValueAtTime(vol * (i === 2 ? 0.4 : 1), start + dur - 1.5)
+      env.gain.linearRampToValueAtTime(0, start + dur)
+      osc.connect(filt); filt.connect(env); env.connect(master)
+      osc.start(start); osc.stop(start + dur)
+    })
   }
 
-  // A minor chord progression: Am → F → C → G (repeating)
-  const chords = [220, 174.61, 130.81, 196] // A2, F2, C2, G2
-  const totalBars = Math.ceil(TOTAL_MS / 1000 / bar) + 2
+  // Am → G → F → C (loop)
+  const chords = [
+    [220, 261.63, 329.63],   // Am: A3 C4 E4
+    [196, 246.94, 293.66],   // G:  G3 B3 D4
+    [174.61, 220, 261.63],   // F:  F3 A3 C4
+    [130.81, 164.81, 196],   // C:  C3 E3 G3
+  ]
 
   for (let i = 0; i < totalBars; i++) {
-    const chordFreq = chords[i % chords.length]
     const t = ctx.currentTime + i * bar
-    playPad(chordFreq,        t, bar + 0.2, 0.06)
-    playPad(chordFreq * 2,    t, bar + 0.2, 0.04)
-    playPad(chordFreq * 2.97, t, bar + 0.2, 0.03) // approximate 5th
+    const chord = chords[i % chords.length]
+    chord.forEach(f => pad(f, t, bar + 0.3, 0.04))
   }
 
-  // ── Kick drum ────────────────────────────────────────────────────────────────
+  // ── Soft kick (sine sweep) ─────────────────────────────────────────────────
   function kick(t: number) {
     const osc = ctx.createOscillator()
     const env = ctx.createGain()
-    osc.frequency.setValueAtTime(150, t)
-    osc.frequency.exponentialRampToValueAtTime(0.01, t + 0.4)
-    env.gain.setValueAtTime(0.5, t)
-    env.gain.exponentialRampToValueAtTime(0.001, t + 0.4)
+    osc.frequency.setValueAtTime(120, t)
+    osc.frequency.exponentialRampToValueAtTime(40, t + 0.35)
+    env.gain.setValueAtTime(0.35, t)
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.35)
     osc.connect(env); env.connect(master)
-    osc.start(t); osc.stop(t + 0.4)
+    osc.start(t); osc.stop(t + 0.35)
   }
 
-  // ── Hi-hat ───────────────────────────────────────────────────────────────────
-  function hihat(t: number, vol = 0.08) {
-    const bufSize = ctx.sampleRate * 0.05
-    const buf     = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const data    = buf.getChannelData(0)
+  // ── Snare (filtered noise) ─────────────────────────────────────────────────
+  function snare(t: number) {
+    const bufSize = Math.floor(ctx.sampleRate * 0.12)
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
+    const data = buf.getChannelData(0)
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1)
+    const src   = ctx.createBufferSource()
+    const band  = ctx.createBiquadFilter()
+    const env   = ctx.createGain()
+    src.buffer  = buf
+    band.type   = 'bandpass'; band.frequency.value = 1800; band.Q.value = 0.9
+    env.gain.setValueAtTime(0.12, t)
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.12)
+    src.connect(band); band.connect(env); env.connect(master)
+    src.start(t); src.stop(t + 0.12)
+  }
+
+  // ── Soft hi-hat (short noise burst) ───────────────────────────────────────
+  function hat(t: number, vol = 0.04) {
+    const bufSize = Math.floor(ctx.sampleRate * 0.03)
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate)
+    const data = buf.getChannelData(0)
     for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
-    const src    = ctx.createBufferSource()
-    const filter = ctx.createBiquadFilter()
-    const env    = ctx.createGain()
-    src.buffer   = buf
-    filter.type  = 'highpass'; filter.frequency.value = 7000
+    const src   = ctx.createBufferSource()
+    const filt  = ctx.createBiquadFilter()
+    const env   = ctx.createGain()
+    src.buffer  = buf
+    filt.type   = 'highpass'; filt.frequency.value = 8000
     env.gain.setValueAtTime(vol, t)
-    env.gain.exponentialRampToValueAtTime(0.001, t + 0.05)
-    src.connect(filter); filter.connect(env); env.connect(master)
-    src.start(t); src.stop(t + 0.05)
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.03)
+    src.connect(filt); filt.connect(env); env.connect(master)
+    src.start(t); src.stop(t + 0.03)
   }
 
-  // ── Bass line ────────────────────────────────────────────────────────────────
+  // ── Warm bass (sine) ───────────────────────────────────────────────────────
   function bass(freq: number, t: number, dur: number) {
     const osc = ctx.createOscillator()
-    const env = ctx.createGain()
-    osc.type = 'triangle'; osc.frequency.value = freq
+    const filt = ctx.createBiquadFilter()
+    const env  = ctx.createGain()
+    osc.type = 'sine'; osc.frequency.value = freq
+    filt.type = 'lowpass'; filt.frequency.value = 200
     env.gain.setValueAtTime(0, t)
-    env.gain.linearRampToValueAtTime(0.12, t + 0.02)
-    env.gain.setValueAtTime(0.12, t + dur - 0.05)
+    env.gain.linearRampToValueAtTime(0.18, t + 0.04)
+    env.gain.setValueAtTime(0.18, t + dur - 0.06)
     env.gain.linearRampToValueAtTime(0, t + dur)
-    osc.connect(env); env.connect(master)
+    osc.connect(filt); filt.connect(env); env.connect(master)
     osc.start(t); osc.stop(t + dur)
   }
 
-  const bassNotes = [55, 43.65, 32.7, 49] // A1, F1, C1, G1
+  // Bass roots: A1, G1, F1, C1
+  const bassRoots = [55, 49, 43.65, 32.7]
 
-  // Schedule drums + bass for entire duration
   for (let i = 0; i < totalBars; i++) {
-    const barStart   = ctx.currentTime + i * bar
-    const bassFreq   = bassNotes[i % bassNotes.length]
-    const nextBassF  = bassNotes[(i+1) % bassNotes.length]
+    const t  = ctx.currentTime + i * bar
+    const br = bassRoots[i % bassRoots.length]
 
-    // Kick: beat 1 and beat 3
-    kick(barStart)
-    kick(barStart + beat * 2)
+    // Kick: beat 1, beat 3 (sometimes beat 3+ for variation)
+    kick(t)
+    kick(t + beat * 2)
+    if (i % 2 === 1) kick(t + beat * 2.5) // off-beat variation
 
-    // Hi-hats: every half beat
+    // Snare: beat 2, beat 4
+    snare(t + beat)
+    snare(t + beat * 3)
+
+    // Hi-hats: every beat + off-beats (light)
     for (let h = 0; h < 8; h++) {
-      hihat(barStart + h * (beat / 2), h % 2 === 0 ? 0.09 : 0.05)
+      hat(t + h * (beat / 2), h % 2 === 0 ? 0.05 : 0.025)
     }
 
-    // Bass: two notes per bar
-    bass(bassFreq,  barStart,           beat * 2)
-    bass(nextBassF, barStart + beat * 2, beat * 2)
+    // Bass: two half-bar notes
+    bass(br,                   t,              beat * 1.9)
+    bass(bassRoots[(i+1) % 4], t + beat * 2,   beat * 1.9)
   }
 
-  // Return a stop function that fades out
   return () => {
-    master.gain.linearRampToValueAtTime(0, ctx.currentTime + 2)
+    master.gain.cancelScheduledValues(ctx.currentTime)
+    master.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5)
   }
 }
 
@@ -459,7 +473,6 @@ export default function HowItWorksSection() {
   const [sceneElapsed, setSceneElapsed] = useState(0)
   const [,             forceRender]     = useState(0)
 
-  // Pre-fetch single ElevenLabs audio clip
   useEffect(()=>{
     let dead=false
     async function go() {
@@ -482,15 +495,13 @@ export default function HowItWorksSection() {
     const s=SCENES.find(x=>ms>=x.start&&ms<x.end)??SCENES[SCENES.length-1]
     setSceneId(s.id); setSceneElapsed(ms-s.start); forceRender(n=>n+1)
     if (ms<TOTAL_MS) rafRef.current=requestAnimationFrame(rafTick)
-    else if (stopMusicRef.current) stopMusicRef.current() // fade music out at end
+    else if (stopMusicRef.current) stopMusicRef.current()
   },[])
 
   const startDemo=useCallback(()=>{
     cancelAnimationFrame(rafRef.current)
     window.speechSynthesis?.cancel()
     if (audioRef.current){audioRef.current.pause();audioRef.current.currentTime=0}
-
-    // Stop previous music
     if (stopMusicRef.current) stopMusicRef.current()
     if (audioCtxRef.current) audioCtxRef.current.close()
 
@@ -498,14 +509,14 @@ export default function HowItWorksSection() {
     setElapsed(0); setSceneId('brand'); setSceneElapsed(0); setStarted(true)
     rafRef.current=requestAnimationFrame(rafTick)
 
-    // Start background music
+    // Start lo-fi background music
     try {
       const ctx=new (window.AudioContext||(window as any).webkitAudioContext)()
       audioCtxRef.current=ctx
       stopMusicRef.current=createDemoMusic(ctx)
     } catch {}
 
-    // Play voice
+    // Play voiceover
     if (audioReady&&audioRef.current) {
       audioRef.current.play().catch(()=>{})
     } else if ('speechSynthesis' in window) {
