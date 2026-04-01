@@ -55,11 +55,11 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
               </Link>
             )}
             <Link href="/record" className="btn btn-primary btn-sm">🎤 New Rep</Link>
-            <div style={{
-              background: 'var(--card)', border: '1px solid var(--border-light)',
-              borderRadius: '100px', padding: '6px 12px', fontSize: '13px',
-              fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px'
-            }}>
+            <div className="token-pill" style={{
+    background: 'var(--card)', border: '1px solid var(--border-light)',
+    borderRadius: '100px', padding: '6px 12px', fontSize: '13px',
+    fontWeight: 700, color: 'var(--accent)', display: 'flex', alignItems: 'center', gap: '4px'
+  }}>
               🪙 {tokens === null ? '...' : tokens >= 999999 ? '∞' : tokens}
             </div>
             <button

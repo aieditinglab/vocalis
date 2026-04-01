@@ -163,7 +163,8 @@ export default function DashboardPage() {
             {/* ── PERSONAL BESTS TAB ── */}
             {tab === 'bests' && personalBests && (
               <div className="anim-fade-in">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px', marginBottom: '32px' }}>
+                <div className="bests-grid" style={{ marginBottom: '32px' }}>
+
                   {[
                     { icon: '🏆', label: 'Highest Clarity Score', val: personalBests.bestClarity, sub: `/ 100 · ${fmtDate(personalBests.bestClarityDate)}`, color: 'var(--accent)' },
                     { icon: '🎯', label: 'Lowest Filler Words', val: personalBests.lowestFillers, sub: 'in a single session', color: personalBests.lowestFillers === 0 ? 'var(--accent)' : 'var(--white)' },
@@ -234,7 +235,8 @@ export default function DashboardPage() {
                       </div>
                       {expanded === s.id && (
                         <div className="anim-fade-in" style={{ background: 'var(--card2)', border: '1px solid var(--border-light)', borderRadius: '0 0 20px 20px', marginTop: '-10px', padding: '24px', paddingTop: '32px' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+
                             <div>
                               <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '12px' }}>METRICS</p>
                               {[

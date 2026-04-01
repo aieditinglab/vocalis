@@ -89,7 +89,7 @@ export default function AdminPage() {
         )}
 
         {/* Stats overview */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
+        <div className="admin-stats" style={{ marginBottom: '32px' }}>
           {[
             { label: 'Total Users', val: users.length, icon: '👥' },
             { label: 'Total Sessions', val: sessions.length + '+', icon: '🎤' },

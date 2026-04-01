@@ -150,7 +150,7 @@ export default function LevelUpPage() {
         {prev && (
           <div className="anim-slide-up anim-d3" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '14px' }}>
             <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '18px' }}>VS LAST SESSION</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px' }}>
+            <div className="compare-4">
               {[
                 { label: 'Fillers', val: session.fillerCount, delta: fillerDelta, better: (fillerDelta ?? 0) <= 0 },
                 { label: 'Pace', val: session.pace > 0 ? `${session.pace}` : '—', delta: null, better: true },
@@ -190,7 +190,7 @@ export default function LevelUpPage() {
           <svg id="chart-svg" viewBox="0 0 600 100" width="100%" style={{ display: 'block', overflow: 'visible' }} />
         </div>
 
-        <div className="anim-slide-up anim-d5" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px' }}>
+        <div className="btn-pair anim-slide-up anim-d5">
           <button className="btn btn-primary btn-lg btn-full" onClick={() => router.push('/record')}>🎤 Start Another Rep</button>
           <button className="btn btn-outline btn-lg" onClick={() => router.push('/dashboard')} style={{ padding: '18px 24px' }}>Dashboard</button>
         </div>

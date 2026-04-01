@@ -147,7 +147,8 @@ export default function ObservePage() {
 
         {/* Metrics */}
         {metrics && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '24px' }}>
+          <div className="metrics-grid" style={{ gap: '14px', marginBottom: '24px' }}>
+
             {[
               {
                 label: 'Filler Words',

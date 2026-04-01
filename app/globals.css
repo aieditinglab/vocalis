@@ -320,3 +320,73 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
     font-size: 60px !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE ADDITIONS — append these to the existing globals.css
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── New utility classes (desktop defaults) ── */
+.vocal-cards     { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.bests-grid      { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.admin-stats     { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.compare-4       { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.btn-pair        { display: grid; grid-template-columns: 1fr auto; gap: 12px; }
+.settings-input-lg  { width: 180px; }
+.settings-input-xl  { width: 220px; }
+
+/* ── TABLET (max 768px) ── */
+@media (max-width: 768px) {
+  .bests-grid          { grid-template-columns: repeat(2, 1fr) !important; }
+  .admin-stats         { grid-template-columns: repeat(2, 1fr) !important; }
+  .compare-4           { grid-template-columns: 1fr 1fr !important; }
+  .vocal-cards         { grid-template-columns: repeat(3, 1fr) !important; }
+}
+
+/* ── PHONE (max 480px) ── */
+@media (max-width: 480px) {
+  /* Vocal method — 2 cols then wrap */
+  .vocal-cards         { grid-template-columns: 1fr 1fr !important; }
+
+  /* Personal bests — 2x2 */
+  .bests-grid          { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+
+  /* Admin stats — 1 col */
+  .admin-stats         { grid-template-columns: 1fr !important; }
+
+  /* 4-col comparison — 2x2 */
+  .compare-4           { grid-template-columns: 1fr 1fr !important; }
+
+  /* Button pairs — stack on tiny screens */
+  .btn-pair            { grid-template-columns: 1fr !important; }
+  .btn-pair > :last-child { padding: 16px !important; }
+
+  /* Settings inputs — full width */
+  .settings-input-lg   { width: 100% !important; }
+  .settings-input-xl   { width: 100% !important; }
+  .settings-row        { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .settings-row select { width: 100% !important; }
+
+  /* Nav token — compact */
+  .token-pill          { padding: 5px 10px !important; font-size: 12px !important; }
+
+  /* Feedback cards always stack */
+  .feedback-card       { flex-direction: column; gap: 10px; }
+
+  /* Practice game cards — stack icon + text */
+  .game-card-inner     { flex-direction: column !important; }
+
+  /* Clarity hero number smaller */
+  .clarity-num         { font-size: 72px !important; }
+
+  /* Leaderboard stat — smaller font */
+  .lb-stat             { font-size: 22px !important; }
+
+  /* Record page category grid stays 2-col (it's fine) */
+}
+
+/* ── VERY SMALL (max 360px) ── */
+@media (max-width: 360px) {
+  .vocal-cards         { grid-template-columns: 1fr !important; }
+  .compare-4           { grid-template-columns: 1fr !important; }
+  .bests-grid          { grid-template-columns: 1fr !important; }
+}

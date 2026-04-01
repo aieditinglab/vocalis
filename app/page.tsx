@@ -44,7 +44,8 @@ export default function LandingPage(){
       <div style={{display:'flex',justifyContent:'center',gap:'clamp(12px,3vw,52px)',marginBottom:'48px'}}>
         {['V','O','C','A','L'].map(l=><span key={l} className="vocal-letter">{l}</span>)}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'12px'}}>
+      <div className="vocal-cards">
+
         {[{l:'V',t:'Voice',d:'Record a spoken response'},{l:'O',t:'Observe',d:'AI analyzes speech instantly'},{l:'C',t:'Correct',d:'Get 3 coaching points'},{l:'A',t:'Apply',d:'Record again with feedback'},{l:'L',t:'Level Up',d:'Track improvement over time'}].map(i=>(
           <div key={i.l} className="card" style={{padding:'22px'}}><div className="font-display" style={{fontSize:'30px',fontWeight:900,color:'var(--accent)',marginBottom:'12px'}}>{i.l}</div><div style={{fontWeight:600,fontSize:'14px',marginBottom:'6px'}}>{i.t}</div><div style={{fontSize:'12px',color:'var(--text-muted)',lineHeight:1.55}}>{i.d}</div></div>
         ))}

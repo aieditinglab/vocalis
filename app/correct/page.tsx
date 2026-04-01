@@ -146,7 +146,8 @@ export default function CorrectPage() {
         )}
 
         {feedback.length > 0 && (
-          <div className="anim-slide-up anim-d6" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px' }}>
+          <div className="btn-pair anim-slide-up anim-d6">
+
             <button className="btn btn-primary btn-lg btn-full" onClick={handleReRecord}>
               🎤 Apply &amp; Re-Record
             </button>

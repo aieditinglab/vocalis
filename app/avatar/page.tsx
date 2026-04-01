@@ -179,10 +179,11 @@ export default function AvatarPage() {
           }}>{msg}</div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '28px', alignItems: 'start' }}>
+<div className="avatar-layout" style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: '28px', alignItems: 'start' }}>
 
           {/* ── Left panel: Avatar preview ─────────────────────── */}
-          <div style={{ position: 'sticky', top: '88px' }}>
+          <div className="avatar-sticky" style={{ position: 'sticky', top: '88px' }}>
+
             <div className="dash-card" style={{ padding: '28px', textAlign: 'center', marginBottom: '12px' }}>
 
               {previewAvatar && (

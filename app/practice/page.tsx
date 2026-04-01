@@ -50,7 +50,7 @@ export default function PracticePage(){
           {id:'tongue-twister',icon:'🌀',title:'Tongue Twister',desc:'8 progressive twisters. Rate your own clarity. Trains articulation and builds speaking confidence.',reward:'+12 🪙',best:b3,color:'var(--blue)'},
         ].map((g,i)=>(
           <div key={g.id} className="game-card anim-slide-up" style={{animationDelay:`${.1+i*.1}s`}} onClick={()=>setActive(g.id as GameId)}>
-            <div style={{display:'flex',alignItems:'flex-start',gap:'20px'}}>
+            <div className="game-card-inner" style={{display:'flex',alignItems:'flex-start',gap:'20px'}}>
               <div style={{fontSize:'42px',flexShrink:0}}>{g.icon}</div>
               <div style={{flex:1}}>
                 <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'8px',flexWrap:'wrap'}}>

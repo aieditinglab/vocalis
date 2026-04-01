@@ -265,7 +265,7 @@ export default function TrainPage() {
 
         {/* Quick stats if sessions exist */}
         {stats && stats.totalSessions > 0 && (
-          <div className="anim-slide-up anim-d3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '48px' }}>
+          <div className="compare-4 anim-slide-up anim-d3" style={{ marginBottom: '48px' }}>
             {[
               { label: 'Sessions',     val: String(stats.totalSessions),   sub: 'total' },
               { label: 'Best Clarity', val: String(stats.bestClarity),     sub: '/ 100' },
@@ -303,7 +303,7 @@ export default function TrainPage() {
           </p>
         </div>
 
-        <div className="anim-slide-up anim-d4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px' }}>
+        <div className="games-grid anim-slide-up anim-d4" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '16px' }}>
           {GAMES.map(g => (
             <button key={g.id} className="game-card" onClick={() => setActiveGame(g.id)}>
               <div style={{ fontSize: '40px', marginBottom: '16px' }}>{g.emoji}</div>
