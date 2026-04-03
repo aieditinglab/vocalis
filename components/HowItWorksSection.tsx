@@ -53,241 +53,112 @@ const STATS = [
   { num:'0',   text:'AI coaches built for this problem. Until now.' },
 ]
 
-// ─── Music: cinematic ambient electronic ────────────────────────────────────
-// Inspired by lo-fi / chillhop: warm pads, soft kick, snare on 2&4, walking bass
-// Key: A minor | BPM: 88 | Volume sits UNDER the voice comfortably
-
+// ─── Music ───────────────────────────────────────────────────────────────────
 function createDemoMusic(ctx: AudioContext): () => void {
   const master = ctx.createGain()
   master.gain.setValueAtTime(0, ctx.currentTime)
   master.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 3.5)
   master.connect(ctx.destination)
 
-  // Reverb effect via convolver
-  function makeReverb(duration = 1.8, decay = 2.5): ConvolverNode {
+  function makeReverb(): ConvolverNode {
     const conv = ctx.createConvolver()
-    const rate = ctx.sampleRate
-    const len  = rate * duration
-    const buf  = ctx.createBuffer(2, len, rate)
+    const len  = ctx.sampleRate * 2
+    const buf  = ctx.createBuffer(2, len, ctx.sampleRate)
     for (let c = 0; c < 2; c++) {
       const d = buf.getChannelData(c)
-      for (let i = 0; i < len; i++) {
-        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay)
-      }
+      for (let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/len, 2.5)
     }
     conv.buffer = buf
     return conv
   }
+  const reverb = makeReverb()
+  const reverbGain = ctx.createGain(); reverbGain.gain.value = 0.25
+  reverb.connect(reverbGain); reverbGain.connect(master)
 
-  const reverb   = makeReverb()
-  const reverbGain = ctx.createGain()
-  reverbGain.gain.value = 0.28
-  reverb.connect(reverbGain)
-  reverbGain.connect(master)
+  const bpm = 88, beat = 60/bpm, bar = beat*4
+  const totalBars = Math.ceil((TOTAL_MS/1000)/bar) + 2
 
-  const bpm  = 88
-  const beat = 60 / bpm
-  const bar  = beat * 4
-  const totalBars = Math.ceil((TOTAL_MS / 1000) / bar) + 2
-
-  // ── Warm pad (triangle waves, slightly detuned, through low-pass) ─────────
   function pad(freq: number, start: number, dur: number, vol: number) {
-    const osc1   = ctx.createOscillator()
-    const osc2   = ctx.createOscillator()
-    const osc3   = ctx.createOscillator()
-    const filter = ctx.createBiquadFilter()
-    const env    = ctx.createGain()
-
-    osc1.type = 'triangle'; osc1.frequency.value = freq
-    osc2.type = 'triangle'; osc2.frequency.value = freq * 1.004
-    osc3.type = 'sine';     osc3.frequency.value = freq * 0.5 // sub octave
-
-    filter.type = 'lowpass'
-    filter.frequency.setValueAtTime(400, start)
-    filter.frequency.linearRampToValueAtTime(700, start + 1.5)
-    filter.Q.value = 0.7
-
-    env.gain.setValueAtTime(0, start)
-    env.gain.linearRampToValueAtTime(vol, start + 1.2)
-    env.gain.setValueAtTime(vol, start + dur - 1.8)
-    env.gain.linearRampToValueAtTime(0, start + dur)
-
-    osc1.connect(filter); osc2.connect(filter); osc3.connect(filter)
-    filter.connect(env)
-    env.connect(master)
-    env.connect(reverb)
-
+    const osc1=ctx.createOscillator(), osc2=ctx.createOscillator(), osc3=ctx.createOscillator()
+    const filt=ctx.createBiquadFilter(), env=ctx.createGain()
+    osc1.type='triangle'; osc1.frequency.value=freq
+    osc2.type='triangle'; osc2.frequency.value=freq*1.004
+    osc3.type='sine';     osc3.frequency.value=freq*0.5
+    filt.type='lowpass'; filt.frequency.setValueAtTime(400,start); filt.frequency.linearRampToValueAtTime(700,start+1.5); filt.Q.value=0.7
+    env.gain.setValueAtTime(0,start); env.gain.linearRampToValueAtTime(vol,start+1.2)
+    env.gain.setValueAtTime(vol,start+dur-1.8); env.gain.linearRampToValueAtTime(0,start+dur)
+    osc1.connect(filt); osc2.connect(filt); osc3.connect(filt); filt.connect(env)
+    env.connect(master); env.connect(reverb)
     osc1.start(start); osc2.start(start); osc3.start(start)
-    osc1.stop(start + dur); osc2.stop(start + dur); osc3.stop(start + dur)
+    osc1.stop(start+dur); osc2.stop(start+dur); osc3.stop(start+dur)
   }
 
-  // Am - G - F - C chord loop (root + 5th + octave)
-  const chordFreqs = [
-    [110,   165,   220],   // Am: A2 E3 A3
-    [98,    147,   196],   // G:  G2 D3 G3
-    [87.31, 130.81,174.61],// F:  F2 C3 F3
-    [65.41, 98,    130.81],// C:  C2 G2 C3
-  ]
-
-  for (let i = 0; i < totalBars; i++) {
-    const t = ctx.currentTime + i * bar
-    const chord = chordFreqs[i % chordFreqs.length]
-    chord.forEach((f, fi) => {
-      const vols = [0.055, 0.035, 0.025]
-      pad(f, t, bar + 0.3, vols[fi])
-    })
+  const chordFreqs=[[110,165,220],[98,147,196],[87.31,130.81,174.61],[65.41,98,130.81]]
+  for (let i=0;i<totalBars;i++) {
+    const t=ctx.currentTime+i*bar
+    chordFreqs[i%chordFreqs.length].forEach((f,fi)=>pad(f,t,bar+0.3,[0.055,0.035,0.025][fi]))
   }
 
-  // ── Melody / lead (soft sine, plays a gentle riff) ────────────────────────
-  // Simple pentatonic A minor melody: A4-C5-E5-D5 pattern
-  const melodyNotes = [440, 523.25, 659.25, 587.33, 440, 392, 440, 523.25]
-  const melodyTiming = [0, beat*0.5, beat, beat*1.5, beat*2, beat*2.5, beat*3, beat*3.5]
-
-  function melodyNote(freq: number, start: number, dur: number, vol: number) {
-    const osc  = ctx.createOscillator()
-    const env  = ctx.createGain()
-    const filt = ctx.createBiquadFilter()
-    osc.type = 'sine'; osc.frequency.value = freq
-    filt.type = 'lowpass'; filt.frequency.value = 2000
-    env.gain.setValueAtTime(0, start)
-    env.gain.linearRampToValueAtTime(vol, start + 0.05)
-    env.gain.setValueAtTime(vol, start + dur - 0.08)
-    env.gain.linearRampToValueAtTime(0, start + dur)
-    osc.connect(filt); filt.connect(env)
-    env.connect(master)
-    env.connect(reverb)
-    osc.start(start); osc.stop(start + dur)
+  const melNotes=[440,523.25,659.25,587.33,440,392,440,523.25]
+  const melTiming=[0,beat*.5,beat,beat*1.5,beat*2,beat*2.5,beat*3,beat*3.5]
+  function melNote(freq:number,start:number,dur:number,vol:number) {
+    const osc=ctx.createOscillator(),env=ctx.createGain()
+    osc.type='sine'; osc.frequency.value=freq
+    env.gain.setValueAtTime(0,start); env.gain.linearRampToValueAtTime(vol,start+0.05)
+    env.gain.setValueAtTime(vol,start+dur-0.08); env.gain.linearRampToValueAtTime(0,start+dur)
+    osc.connect(env); env.connect(master); env.connect(reverb)
+    osc.start(start); osc.stop(start+dur)
+  }
+  for (let i=1;i<totalBars;i+=2) {
+    const b=ctx.currentTime+i*bar
+    melNotes.forEach((n,ni)=>melNote(n,b+melTiming[ni],beat*0.42,0.025))
   }
 
-  // Play melody every 2 bars starting from bar 1
-  for (let i = 1; i < totalBars; i += 2) {
-    const barStart = ctx.currentTime + i * bar
-    melodyNotes.forEach((note, ni) => {
-      melodyNote(note, barStart + melodyTiming[ni], beat * 0.42, 0.025)
-    })
+  function kick(t:number) {
+    const osc=ctx.createOscillator(),env=ctx.createGain()
+    osc.frequency.setValueAtTime(160,t); osc.frequency.exponentialRampToValueAtTime(40,t+0.32)
+    env.gain.setValueAtTime(0.55,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.32)
+    osc.connect(env); env.connect(master); osc.start(t); osc.stop(t+0.32)
   }
-
-  // ── Kick (punchy sine sweep) ──────────────────────────────────────────────
-  function kick(t: number) {
-    const osc = ctx.createOscillator()
-    const env = ctx.createGain()
-    osc.frequency.setValueAtTime(160, t)
-    osc.frequency.exponentialRampToValueAtTime(40, t + 0.32)
-    env.gain.setValueAtTime(0.55, t)
-    env.gain.exponentialRampToValueAtTime(0.001, t + 0.32)
-    osc.connect(env); env.connect(master)
-    osc.start(t); osc.stop(t + 0.32)
+  function snare(t:number) {
+    const bsz=Math.floor(ctx.sampleRate*0.15),buf=ctx.createBuffer(1,bsz,ctx.sampleRate)
+    const d=buf.getChannelData(0); for(let i=0;i<bsz;i++) d[i]=Math.random()*2-1
+    const src=ctx.createBufferSource(),nf=ctx.createBiquadFilter(),ne=ctx.createGain()
+    src.buffer=buf; nf.type='bandpass'; nf.frequency.value=2200; nf.Q.value=0.8
+    ne.gain.setValueAtTime(0.14,t); ne.gain.exponentialRampToValueAtTime(0.001,t+0.15)
+    src.connect(nf); nf.connect(ne); ne.connect(master); src.start(t); src.stop(t+0.15)
+    const tone=ctx.createOscillator(),te=ctx.createGain()
+    tone.frequency.setValueAtTime(220,t); tone.frequency.exponentialRampToValueAtTime(120,t+0.12)
+    te.gain.setValueAtTime(0.08,t); te.gain.exponentialRampToValueAtTime(0.001,t+0.12)
+    tone.connect(te); te.connect(master); tone.start(t); tone.stop(t+0.12)
   }
-
-  // ── Snare (noise + tone blend) ────────────────────────────────────────────
-  function snare(t: number) {
-    // Noise component
-    const bufSize = Math.floor(ctx.sampleRate * 0.15)
-    const buf     = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const data    = buf.getChannelData(0)
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
-    const noise = ctx.createBufferSource()
-    const nFilt = ctx.createBiquadFilter()
-    const nEnv  = ctx.createGain()
-    noise.buffer = buf
-    nFilt.type = 'bandpass'; nFilt.frequency.value = 2200; nFilt.Q.value = 0.8
-    nEnv.gain.setValueAtTime(0.14, t)
-    nEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.15)
-    noise.connect(nFilt); nFilt.connect(nEnv); nEnv.connect(master)
-    noise.start(t); noise.stop(t + 0.15)
-
-    // Tone component
-    const tone  = ctx.createOscillator()
-    const tEnv  = ctx.createGain()
-    tone.frequency.setValueAtTime(220, t)
-    tone.frequency.exponentialRampToValueAtTime(120, t + 0.12)
-    tEnv.gain.setValueAtTime(0.08, t)
-    tEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.12)
-    tone.connect(tEnv); tEnv.connect(master)
-    tone.start(t); tone.stop(t + 0.12)
+  function hat(t:number,vol=0.055) {
+    const bsz=Math.floor(ctx.sampleRate*0.025),buf=ctx.createBuffer(1,bsz,ctx.sampleRate)
+    const d=buf.getChannelData(0); for(let i=0;i<bsz;i++) d[i]=Math.random()*2-1
+    const src=ctx.createBufferSource(),filt=ctx.createBiquadFilter(),env=ctx.createGain()
+    src.buffer=buf; filt.type='highpass'; filt.frequency.value=9000
+    env.gain.setValueAtTime(vol,t); env.gain.exponentialRampToValueAtTime(0.001,t+0.025)
+    src.connect(filt); filt.connect(env); env.connect(master); src.start(t); src.stop(t+0.025)
   }
-
-  // ── Hi-hat (crisp, short) ─────────────────────────────────────────────────
-  function hat(t: number, vol = 0.055, open = false) {
-    const bufSize = Math.floor(ctx.sampleRate * (open ? 0.08 : 0.025))
-    const buf     = ctx.createBuffer(1, bufSize, ctx.sampleRate)
-    const data    = buf.getChannelData(0)
-    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1
-    const src   = ctx.createBufferSource()
-    const filt  = ctx.createBiquadFilter()
-    const env   = ctx.createGain()
-    src.buffer  = buf
-    filt.type   = 'highpass'; filt.frequency.value = 9000
-    env.gain.setValueAtTime(vol, t)
-    env.gain.exponentialRampToValueAtTime(0.001, t + bufSize / ctx.sampleRate)
-    src.connect(filt); filt.connect(env); env.connect(master)
-    src.start(t); src.stop(t + bufSize / ctx.sampleRate)
+  function bass(freq:number,t:number,dur:number) {
+    const osc=ctx.createOscillator(),filt=ctx.createBiquadFilter(),env=ctx.createGain()
+    osc.type='sine'; osc.frequency.value=freq; filt.type='lowpass'; filt.frequency.value=280
+    env.gain.setValueAtTime(0,t); env.gain.linearRampToValueAtTime(0.2,t+0.025)
+    env.gain.setValueAtTime(0.2,t+dur-0.05); env.gain.linearRampToValueAtTime(0,t+dur)
+    osc.connect(filt); filt.connect(env); env.connect(master); osc.start(t); osc.stop(t+dur)
   }
-
-  // ── Walking bass line (sine, punchy) ──────────────────────────────────────
-  function bass(freq: number, t: number, dur: number) {
-    const osc   = ctx.createOscillator()
-    const dist  = ctx.createWaveShaper()
-    const env   = ctx.createGain()
-    const filt  = ctx.createBiquadFilter()
-
-    // Very mild saturation for warmth
-    const curve = new Float32Array(256)
-    for (let i = 0; i < 256; i++) {
-      const x = (i * 2) / 256 - 1
-      curve[i] = (Math.PI + 8) * x / (Math.PI + 8 * Math.abs(x))
-    }
-    dist.curve = curve
-
-    osc.type = 'sine'; osc.frequency.value = freq
-    filt.type = 'lowpass'; filt.frequency.value = 280
-
-    env.gain.setValueAtTime(0, t)
-    env.gain.linearRampToValueAtTime(0.2, t + 0.025)
-    env.gain.setValueAtTime(0.2, t + dur - 0.05)
-    env.gain.linearRampToValueAtTime(0, t + dur)
-
-    osc.connect(dist); dist.connect(filt); filt.connect(env); env.connect(master)
-    osc.start(t); osc.stop(t + dur)
+  const bassWalks=[[55,49],[49,43.65],[43.65,65.41],[65.41,55]]
+  for (let i=0;i<totalBars;i++) {
+    const t=ctx.currentTime+i*bar, bw=bassWalks[i%bassWalks.length]
+    kick(t); kick(t+beat*2); if(i%4===2) kick(t+beat*2.5)
+    snare(t+beat); snare(t+beat*3)
+    for(let h=0;h<8;h++) hat(t+h*(beat/2),h%2===0?0.06:0.03)
+    bass(bw[0],t,beat*1.85); bass(bw[1],t+beat*2,beat*1.85)
   }
-
-  // Bass walk: A-G-F-C per bar, subdivided
-  const bassWalks = [
-    [55, 49],       // Am bar: A1, G1
-    [49, 43.65],    // G bar:  G1, F1
-    [43.65, 65.41], // F bar:  F1, C2
-    [65.41, 55],    // C bar:  C2, A1
-  ]
-
-  for (let i = 0; i < totalBars; i++) {
-    const t  = ctx.currentTime + i * bar
-    const bw = bassWalks[i % bassWalks.length]
-
-    // Kick: beat 1 + beat 3, with occasional ghost on beat 2.5
-    kick(t)
-    kick(t + beat * 2)
-    if (i % 4 === 2) kick(t + beat * 2.5) // variation every 4th bar
-
-    // Snare: beat 2 + beat 4 (classic backbeat)
-    snare(t + beat)
-    snare(t + beat * 3)
-
-    // Hi-hats: every 8th note, open hat on beat 3 every other bar
-    for (let h = 0; h < 8; h++) {
-      const isOpen = h === 4 && i % 2 === 1
-      hat(t + h * (beat / 2), h % 2 === 0 ? 0.06 : 0.03, isOpen)
-    }
-
-    // Bass: two notes per bar
-    bass(bw[0], t,              beat * 1.85)
-    bass(bw[1], t + beat * 2,   beat * 1.85)
-  }
-
-  // Fade out
   return () => {
     master.gain.cancelScheduledValues(ctx.currentTime)
-    master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
-    master.gain.linearRampToValueAtTime(0, ctx.currentTime + 2.5)
+    master.gain.setValueAtTime(master.gain.value,ctx.currentTime)
+    master.gain.linearRampToValueAtTime(0,ctx.currentTime+2.5)
   }
 }
 
@@ -302,10 +173,10 @@ function SceneBrand({ v }: { v:boolean }) {
             {[12,20,26,20,12].map((h,i)=><div key={i} style={{ width:4,height:h,background:'#0a0a0a',borderRadius:2 }}/>)}
           </div>
         </div>
-        <span style={{ fontSize:'clamp(36px,5vw,62px)',fontWeight:900,color:'#fff',letterSpacing:-3,lineHeight:1 }}>Vocalis</span>
+        <span style={{ fontSize:'clamp(36px,5vw,72px)',fontWeight:900,color:'#fff',letterSpacing:-3,lineHeight:1 }}>Vocalis</span>
       </div>
-      <div style={{ height:2,background:'linear-gradient(90deg,#c8f53a,transparent)',width:v?300:0,transition:'width 0.8s ease 0.4s',marginBottom:18 }}/>
-      <p style={{ fontSize:'clamp(10px,1.4vw,12px)',fontWeight:600,color:'rgba(255,255,255,0.38)',letterSpacing:6,textTransform:'uppercase',opacity:v?1:0,transition:'opacity 0.5s ease 0.7s',textAlign:'center' }}>
+      <div style={{ height:2,background:'linear-gradient(90deg,#c8f53a,transparent)',width:v?320:0,transition:'width 0.8s ease 0.4s',marginBottom:18 }}/>
+      <p style={{ fontSize:'clamp(11px,1.4vw,14px)',fontWeight:600,color:'rgba(255,255,255,0.38)',letterSpacing:6,textTransform:'uppercase',opacity:v?1:0,transition:'opacity 0.5s ease 0.7s',textAlign:'center' }}>
         AI Communication Coaching
       </p>
     </div>
@@ -314,22 +185,22 @@ function SceneBrand({ v }: { v:boolean }) {
 
 function SceneProblem({ v, e }: { v:boolean; e:number }) {
   return (
-    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(16px,5%,60px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
-      <div style={{ fontSize:'clamp(9px,1.2vw,11px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase',marginBottom:18 }}>The Problem</div>
-      <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(20px,5%,72px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
+      <div style={{ fontSize:'clamp(10px,1.2vw,12px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase',marginBottom:24 }}>The Problem</div>
+      <div style={{ display:'flex',flexDirection:'column',gap:16 }}>
         {STATS.map((s,i)=>{
           const show=e>i*1800
           return (
-            <div key={i} style={{ display:'flex',alignItems:'flex-start',gap:14,opacity:show?1:0,transform:show?'translateX(0)':'translateX(-24px)',transition:'all 0.5s ease' }}>
-              <div style={{ minWidth:52,fontSize:'clamp(22px,3.5vw,36px)',fontWeight:900,color:'#c8f53a',lineHeight:1,letterSpacing:-2,flexShrink:0 }}>{s.num}</div>
-              <div style={{ fontSize:'clamp(10px,1.4vw,13px)',color:'rgba(255,255,255,0.5)',lineHeight:1.6,paddingTop:4 }}>{s.text}</div>
+            <div key={i} style={{ display:'flex',alignItems:'flex-start',gap:18,opacity:show?1:0,transform:show?'translateX(0)':'translateX(-24px)',transition:'all 0.5s ease' }}>
+              <div style={{ minWidth:60,fontSize:'clamp(26px,3.5vw,42px)',fontWeight:900,color:'#c8f53a',lineHeight:1,letterSpacing:-2,flexShrink:0 }}>{s.num}</div>
+              <div style={{ fontSize:'clamp(12px,1.5vw,16px)',color:'rgba(255,255,255,0.5)',lineHeight:1.6,paddingTop:6 }}>{s.text}</div>
             </div>
           )
         })}
       </div>
-      <div style={{ marginTop:22,paddingTop:16,borderTop:'1px solid rgba(255,255,255,0.07)',opacity:e>5500?1:0,transition:'opacity 0.5s ease',display:'flex',alignItems:'center',gap:10 }}>
-        <div style={{ width:7,height:7,borderRadius:'50%',background:'#c8f53a',boxShadow:'0 0 8px rgba(200,245,58,0.9)',flexShrink:0 }}/>
-        <span style={{ fontSize:'clamp(11px,1.5vw,14px)',fontWeight:700,color:'#fff' }}>Here's how one Vocalis rep works.</span>
+      <div style={{ marginTop:28,paddingTop:20,borderTop:'1px solid rgba(255,255,255,0.07)',opacity:e>5500?1:0,transition:'opacity 0.5s ease',display:'flex',alignItems:'center',gap:12 }}>
+        <div style={{ width:8,height:8,borderRadius:'50%',background:'#c8f53a',boxShadow:'0 0 8px rgba(200,245,58,0.9)',flexShrink:0 }}/>
+        <span style={{ fontSize:'clamp(13px,1.6vw,16px)',fontWeight:700,color:'#fff' }}>Here's how one Vocalis rep works.</span>
       </div>
     </div>
   )
@@ -338,51 +209,49 @@ function SceneProblem({ v, e }: { v:boolean; e:number }) {
 function ScenePractice({ v, e }: { v:boolean; e:number }) {
   const promptVisible=e>400
   const charCount=Math.floor(Math.max(0,Math.min((e-600)/2800,1))*PROMPT_TEXT.length)
-  const btnVisible=e>2800
-  const isRecording=e>3800
-  const recMs=Math.max(0,e-3800)
-  const showTranscript=e>5400
+  const btnVisible=e>2800, isRecording=e>3800
+  const recMs=Math.max(0,e-3800), showTranscript=e>5400
   const WORDS=['I','think','the','biggest','challenge','I','ever','faced','was','learning','to','speak','up','without','second-guessing','myself','every','single','time...']
   const wordCount=showTranscript?Math.min(Math.floor((e-5400)/170),WORDS.length):0
   const t=Date.now()/1000
   return (
-    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(14px,4%,52px)',opacity:v?1:0,transition:'opacity 0.5s ease',gap:8 }}>
-      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:2 }}>
-        <div style={{ width:20,height:20,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-          <span style={{ fontSize:10,fontWeight:800,color:'#c8f53a' }}>1</span>
+    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(18px,4%,64px)',opacity:v?1:0,transition:'opacity 0.5s ease',gap:12 }}>
+      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:4 }}>
+        <div style={{ width:24,height:24,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+          <span style={{ fontSize:12,fontWeight:800,color:'#c8f53a' }}>1</span>
         </div>
-        <span style={{ fontSize:'clamp(9px,1.1vw,11px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>Record Your Rep</span>
+        <span style={{ fontSize:'clamp(10px,1.2vw,13px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>Record Your Rep</span>
       </div>
-      <div style={{ background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.09)',borderRadius:12,padding:'clamp(10px,1.8%,16px)',opacity:promptVisible?1:0,transform:promptVisible?'translateY(0)':'translateY(16px)',transition:'all 0.4s ease' }}>
-        <div style={{ fontSize:'clamp(8px,1vw,10px)',fontWeight:700,color:'rgba(255,255,255,0.25)',letterSpacing:4,textTransform:'uppercase',marginBottom:7 }}>Today's Prompt</div>
-        <div style={{ fontSize:'clamp(10px,1.5vw,14px)',fontWeight:600,color:'#fff',lineHeight:1.55 }}>
+      <div style={{ background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.09)',borderRadius:14,padding:'clamp(14px,2%,22px)',opacity:promptVisible?1:0,transform:promptVisible?'translateY(0)':'translateY(16px)',transition:'all 0.4s ease' }}>
+        <div style={{ fontSize:'clamp(9px,1vw,11px)',fontWeight:700,color:'rgba(255,255,255,0.25)',letterSpacing:4,textTransform:'uppercase',marginBottom:10 }}>Today's Prompt</div>
+        <div style={{ fontSize:'clamp(12px,1.6vw,17px)',fontWeight:600,color:'#fff',lineHeight:1.6 }}>
           {PROMPT_TEXT.slice(0,charCount)}<span style={{ color:'#c8f53a',opacity:!isRecording&&Math.floor(Date.now()/500)%2===0?1:0 }}>|</span>
         </div>
       </div>
-      <div style={{ background:isRecording?'rgba(200,245,58,0.04)':'rgba(255,255,255,0.03)',border:isRecording?'1px solid rgba(200,245,58,0.2)':'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'clamp(9px,1.6%,14px)',opacity:btnVisible?1:0,transition:'all 0.4s ease' }}>
-        <div style={{ display:'flex',alignItems:'center',gap:2.5,height:30,marginBottom:9 }}>
-          {Array.from({length:46}).map((_,i)=>{
-            const h=5+(isRecording?24:3)*Math.abs(Math.sin(t*4+i*0.65))
+      <div style={{ background:isRecording?'rgba(200,245,58,0.04)':'rgba(255,255,255,0.03)',border:isRecording?'1px solid rgba(200,245,58,0.2)':'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:'clamp(12px,1.8%,18px)',opacity:btnVisible?1:0,transition:'all 0.4s ease' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:3,height:40,marginBottom:12 }}>
+          {Array.from({length:50}).map((_,i)=>{
+            const h=5+(isRecording?28:3)*Math.abs(Math.sin(t*4+i*0.65))
             return <div key={i} style={{ flex:1,height:h,borderRadius:2,background:isRecording?'#c8f53a':'rgba(200,245,58,0.15)',transition:'height 0.07s' }}/>
           })}
         </div>
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between' }}>
-          <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-            <div style={{ width:30,height:30,borderRadius:'50%',background:isRecording?'#c8f53a':'rgba(200,245,58,0.1)',border:isRecording?'none':'2px solid rgba(200,245,58,0.25)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isRecording?'0 0 18px rgba(200,245,58,0.45)':'none',transition:'all 0.3s',flexShrink:0 }}>
-              {isRecording?<div style={{ width:9,height:9,background:'#0a0a0a',borderRadius:2 }}/>:<div style={{ width:11,height:11,background:'#c8f53a',borderRadius:'50%' }}/>}
+          <div style={{ display:'flex',alignItems:'center',gap:11 }}>
+            <div style={{ width:36,height:36,borderRadius:'50%',background:isRecording?'#c8f53a':'rgba(200,245,58,0.1)',border:isRecording?'none':'2px solid rgba(200,245,58,0.25)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:isRecording?'0 0 22px rgba(200,245,58,0.45)':'none',transition:'all 0.3s',flexShrink:0 }}>
+              {isRecording?<div style={{ width:12,height:12,background:'#0a0a0a',borderRadius:2 }}/>:<div style={{ width:14,height:14,background:'#c8f53a',borderRadius:'50%' }}/>}
             </div>
             <div>
-              <div style={{ fontSize:'clamp(10px,1.4vw,12px)',fontWeight:700,color:isRecording?'#c8f53a':'rgba(255,255,255,0.4)',lineHeight:1 }}>{isRecording?'● Recording...':'Tap to Record'}</div>
-              {isRecording&&<div style={{ fontSize:'clamp(9px,1.1vw,10px)',color:'rgba(255,255,255,0.25)',marginTop:2 }}>Speaking naturally</div>}
+              <div style={{ fontSize:'clamp(12px,1.4vw,15px)',fontWeight:700,color:isRecording?'#c8f53a':'rgba(255,255,255,0.4)',lineHeight:1 }}>{isRecording?'● Recording...':'Tap to Record'}</div>
+              {isRecording&&<div style={{ fontSize:'clamp(10px,1.1vw,12px)',color:'rgba(255,255,255,0.25)',marginTop:3 }}>Speaking naturally</div>}
             </div>
           </div>
-          {isRecording&&<span style={{ fontSize:'clamp(12px,1.6vw,15px)',fontWeight:800,color:'rgba(255,255,255,0.2)',fontVariantNumeric:'tabular-nums' }}>{String(Math.floor(recMs/1000)).padStart(2,'0')}:{String(Math.floor((recMs%1000)/10)).padStart(2,'0')}</span>}
+          {isRecording&&<span style={{ fontSize:'clamp(14px,1.7vw,18px)',fontWeight:800,color:'rgba(255,255,255,0.2)',fontVariantNumeric:'tabular-nums' }}>{String(Math.floor(recMs/1000)).padStart(2,'0')}:{String(Math.floor((recMs%1000)/10)).padStart(2,'0')}</span>}
         </div>
       </div>
       {showTranscript&&(
-        <div style={{ background:'rgba(200,245,58,0.03)',border:'1px solid rgba(200,245,58,0.1)',borderRadius:10,padding:'clamp(8px,1.2%,11px) clamp(10px,1.5%,13px)' }}>
-          <div style={{ fontSize:'clamp(8px,1vw,9px)',fontWeight:700,color:'rgba(200,245,58,0.5)',letterSpacing:4,textTransform:'uppercase',marginBottom:5 }}>Live Transcript</div>
-          <div style={{ fontSize:'clamp(9px,1.2vw,12px)',color:'rgba(255,255,255,0.48)',lineHeight:1.55 }}>
+        <div style={{ background:'rgba(200,245,58,0.03)',border:'1px solid rgba(200,245,58,0.1)',borderRadius:12,padding:'clamp(10px,1.4%,14px) clamp(12px,1.7%,16px)' }}>
+          <div style={{ fontSize:'clamp(9px,1vw,11px)',fontWeight:700,color:'rgba(200,245,58,0.5)',letterSpacing:4,textTransform:'uppercase',marginBottom:7 }}>Live Transcript</div>
+          <div style={{ fontSize:'clamp(11px,1.3vw,14px)',color:'rgba(255,255,255,0.48)',lineHeight:1.6 }}>
             {WORDS.slice(0,wordCount).join(' ')}{wordCount<WORDS.length&&<span style={{ color:'#c8f53a',opacity:Math.floor(Date.now()/400)%2===0?1:0 }}> |</span>}
           </div>
         </div>
@@ -399,25 +268,25 @@ function SceneProcessing({ v, e }: { v:boolean; e:number }) {
     { label:'Generating coaching report', done:e>2400 },
   ]
   return (
-    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:v?1:0,transition:'opacity 0.5s ease',gap:22 }}>
-      <div style={{ position:'relative',width:64,height:64 }}>
+    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:v?1:0,transition:'opacity 0.5s ease',gap:28 }}>
+      <div style={{ position:'relative',width:72,height:72 }}>
         <div style={{ position:'absolute',inset:0,borderRadius:'50%',background:'rgba(200,245,58,0.1)',transform:`scale(${1+0.16*Math.sin(t*3)})`,transition:'transform 0.05s' }}/>
         <div style={{ position:'absolute',inset:7,borderRadius:'50%',background:'#c8f53a',display:'flex',alignItems:'center',justifyContent:'center' }}>
           <div style={{ display:'flex',gap:3,alignItems:'center' }}>
             {Array.from({length:5}).map((_,i)=>{
               const h=7+11*Math.abs(Math.sin(t*4.5+i*0.9))
-              return <div key={i} style={{ width:3,height:h,background:'#0a0a0a',borderRadius:2,transition:'height 0.06s' }}/>
+              return <div key={i} style={{ width:3.5,height:h,background:'#0a0a0a',borderRadius:2,transition:'height 0.06s' }}/>
             })}
           </div>
         </div>
       </div>
-      <div style={{ display:'flex',flexDirection:'column',gap:10,minWidth:clamp(180,220) }}>
+      <div style={{ display:'flex',flexDirection:'column',gap:12,minWidth:240 }}>
         {steps.map((s,i)=>(
-          <div key={i} style={{ display:'flex',alignItems:'center',gap:10,opacity:e>i*800?1:0.15,transition:'opacity 0.4s ease' }}>
-            <div style={{ width:18,height:18,borderRadius:'50%',background:s.done?'#c8f53a':'rgba(255,255,255,0.08)',border:s.done?'none':'2px solid rgba(255,255,255,0.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.3s' }}>
-              {s.done&&<svg width="9" height="9" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" fill="none" stroke="#0a0a0a" strokeWidth="1.8" strokeLinecap="round"/></svg>}
+          <div key={i} style={{ display:'flex',alignItems:'center',gap:12,opacity:e>i*800?1:0.15,transition:'opacity 0.4s ease' }}>
+            <div style={{ width:22,height:22,borderRadius:'50%',background:s.done?'#c8f53a':'rgba(255,255,255,0.08)',border:s.done?'none':'2px solid rgba(255,255,255,0.15)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all 0.3s' }}>
+              {s.done&&<svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,7.5 8.5,2.5" fill="none" stroke="#0a0a0a" strokeWidth="1.8" strokeLinecap="round"/></svg>}
             </div>
-            <span style={{ fontSize:'clamp(10px,1.4vw,12px)',color:s.done?'#fff':'rgba(255,255,255,0.35)',fontWeight:s.done?600:400,transition:'all 0.3s' }}>{s.label}</span>
+            <span style={{ fontSize:'clamp(12px,1.5vw,15px)',color:s.done?'#fff':'rgba(255,255,255,0.35)',fontWeight:s.done?600:400,transition:'all 0.3s' }}>{s.label}</span>
           </div>
         ))}
       </div>
@@ -425,47 +294,44 @@ function SceneProcessing({ v, e }: { v:boolean; e:number }) {
   )
 }
 
-function clamp(min: number, max: number) { return `clamp(${min}px, 30%, ${max}px)` }
-
 function SceneFeedback({ v, e }: { v:boolean; e:number }) {
   return (
-    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(14px,4%,52px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
-      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,flexWrap:'wrap',gap:7 }}>
-        <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-          <div style={{ width:20,height:20,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-            <span style={{ fontSize:10,fontWeight:800,color:'#c8f53a' }}>2</span>
+    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(18px,4%,64px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
+      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:18,flexWrap:'wrap',gap:10 }}>
+        <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+          <div style={{ width:24,height:24,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+            <span style={{ fontSize:12,fontWeight:800,color:'#c8f53a' }}>2</span>
           </div>
           <div>
-            <div style={{ fontSize:'clamp(9px,1.1vw,11px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>AI Coaching Report</div>
-            <div style={{ fontSize:'clamp(14px,2.2vw,22px)',fontWeight:900,color:'#fff',letterSpacing:-1,lineHeight:1.1 }}>Your breakdown.</div>
+            <div style={{ fontSize:'clamp(10px,1.2vw,12px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>AI Coaching Report</div>
+            <div style={{ fontSize:'clamp(18px,2.5vw,28px)',fontWeight:900,color:'#fff',letterSpacing:-1,lineHeight:1.1 }}>Your breakdown.</div>
           </div>
         </div>
-        <div style={{ background:'rgba(200,245,58,0.07)',border:'1px solid rgba(200,245,58,0.18)',borderRadius:100,padding:'4px 11px',display:'flex',alignItems:'center',gap:6 }}>
-          <div style={{ width:5,height:5,borderRadius:'50%',background:'#c8f53a',boxShadow:'0 0 5px rgba(200,245,58,0.9)' }}/>
-          <span style={{ fontSize:'clamp(9px,1.1vw,10px)',fontWeight:700,color:'#c8f53a' }}>Analysis Complete</span>
+        <div style={{ background:'rgba(200,245,58,0.07)',border:'1px solid rgba(200,245,58,0.18)',borderRadius:100,padding:'6px 14px',display:'flex',alignItems:'center',gap:7 }}>
+          <div style={{ width:6,height:6,borderRadius:'50%',background:'#c8f53a',boxShadow:'0 0 5px rgba(200,245,58,0.9)' }}/>
+          <span style={{ fontSize:'clamp(10px,1.1vw,12px)',fontWeight:700,color:'#c8f53a' }}>Analysis Complete</span>
         </div>
       </div>
-      <div style={{ display:'flex',flexDirection:'column',gap:7 }}>
+      <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
         {FEEDBACK_ITEMS.map((item,i)=>{
-          const delay=i*1800
-          const show=e>delay
+          const delay=i*1800, show=e>delay
           const barPct=show?Math.min(Math.max(0,(e-delay-500)/1000),1)*item.score:0
           return (
-            <div key={item.label} style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'clamp(9px,1.4%,13px) clamp(11px,1.8%,17px)',opacity:show?1:0,transform:show?'translateY(0)':'translateY(14px)',transition:`opacity 0.4s ease ${delay*0.001}s,transform 0.4s ease ${delay*0.001}s` }}>
-              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6,gap:8 }}>
-                <div style={{ display:'flex',alignItems:'center',gap:7,flex:1 }}>
-                  <span style={{ fontSize:14 }}>{item.icon}</span>
+            <div key={item.label} style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:14,padding:'clamp(12px,1.8%,18px) clamp(14px,2%,22px)',opacity:show?1:0,transform:show?'translateY(0)':'translateY(14px)',transition:`opacity 0.4s ease ${delay*0.001}s,transform 0.4s ease ${delay*0.001}s` }}>
+              <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8,gap:12 }}>
+                <div style={{ display:'flex',alignItems:'center',gap:10,flex:1 }}>
+                  <span style={{ fontSize:'clamp(16px,2vw,20px)' }}>{item.icon}</span>
                   <div>
-                    <div style={{ fontSize:'clamp(10px,1.3vw,12px)',fontWeight:700,color:'#fff',lineHeight:1 }}>{item.label}</div>
-                    <div style={{ fontSize:'clamp(9px,1.1vw,10px)',color:item.color,fontWeight:600,marginTop:1 }}>{item.delta}</div>
+                    <div style={{ fontSize:'clamp(12px,1.4vw,15px)',fontWeight:700,color:'#fff',lineHeight:1 }}>{item.label}</div>
+                    <div style={{ fontSize:'clamp(10px,1.1vw,12px)',color:item.color,fontWeight:600,marginTop:2 }}>{item.delta}</div>
                   </div>
                 </div>
-                <span style={{ fontSize:'clamp(16px,2vw,20px)',fontWeight:900,color:item.color,letterSpacing:-1 }}>{Math.round(barPct)}</span>
+                <span style={{ fontSize:'clamp(20px,2.5vw,26px)',fontWeight:900,color:item.color,letterSpacing:-1 }}>{Math.round(barPct)}</span>
               </div>
-              <div style={{ height:2.5,background:'rgba(255,255,255,0.07)',borderRadius:2,marginBottom:6,overflow:'hidden' }}>
+              <div style={{ height:3,background:'rgba(255,255,255,0.07)',borderRadius:2,marginBottom:8,overflow:'hidden' }}>
                 <div style={{ height:'100%',width:`${barPct}%`,background:`linear-gradient(90deg,${item.color},${item.color}77)`,borderRadius:2,transition:'width 0.9s ease' }}/>
               </div>
-              <div style={{ fontSize:'clamp(9px,1.1vw,11px)',color:'rgba(255,255,255,0.35)',lineHeight:1.45 }}>{item.text}</div>
+              <div style={{ fontSize:'clamp(10px,1.2vw,13px)',color:'rgba(255,255,255,0.38)',lineHeight:1.5 }}>{item.text}</div>
             </div>
           )
         })}
@@ -475,62 +341,58 @@ function SceneFeedback({ v, e }: { v:boolean; e:number }) {
 }
 
 function SceneProgress({ v, e }: { v:boolean; e:number }) {
-  const rp=Math.min(e/2200,1)
-  const num=Math.round(65+rp*27)
-  const C=2*Math.PI*72
+  const rp=Math.min(e/2200,1), num=Math.round(65+rp*27), C=2*Math.PI*80
   return (
-    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(14px,4%,52px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
-      <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:14 }}>
-        <div style={{ width:20,height:20,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
-          <span style={{ fontSize:10,fontWeight:800,color:'#c8f53a' }}>3</span>
+    <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',justifyContent:'center',padding:'0 clamp(18px,4%,64px)',opacity:v?1:0,transition:'opacity 0.5s ease' }}>
+      <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:18 }}>
+        <div style={{ width:24,height:24,borderRadius:'50%',background:'rgba(200,245,58,0.15)',border:'1px solid rgba(200,245,58,0.4)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0 }}>
+          <span style={{ fontSize:12,fontWeight:800,color:'#c8f53a' }}>3</span>
         </div>
-        <span style={{ fontSize:'clamp(9px,1.1vw,11px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>Track Your Progress</span>
+        <span style={{ fontSize:'clamp(10px,1.2vw,13px)',fontWeight:700,letterSpacing:5,color:'#c8f53a',textTransform:'uppercase' }}>Track Your Progress</span>
       </div>
-      <div style={{ display:'flex',gap:'clamp(10px,3%,22px)',alignItems:'flex-start',flexWrap:'wrap' }}>
-        <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:9,minWidth:110 }}>
-          <div style={{ position:'relative',width:130,height:130 }}>
+      <div style={{ display:'flex',gap:'clamp(16px,3%,28px)',alignItems:'flex-start',flexWrap:'wrap' }}>
+        <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:12,minWidth:130 }}>
+          <div style={{ position:'relative',width:160,height:160 }}>
             <div style={{ position:'absolute',inset:0,borderRadius:'50%',background:'radial-gradient(circle,rgba(200,245,58,0.1) 0%,transparent 65%)' }}/>
-            <svg width="130" height="130" style={{ position:'absolute',inset:0,transform:'rotate(-90deg)' }}>
-              <circle cx="65" cy="65" r="72" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5"/>
-              <circle cx="65" cy="65" r="72" fill="none" stroke="#c8f53a" strokeWidth="5" strokeDasharray={C} strokeDashoffset={C*(1-rp*0.94)} strokeLinecap="round"/>
+            <svg width="160" height="160" style={{ position:'absolute',inset:0,transform:'rotate(-90deg)' }}>
+              <circle cx="80" cy="80" r="80" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="6"/>
+              <circle cx="80" cy="80" r="80" fill="none" stroke="#c8f53a" strokeWidth="6" strokeDasharray={C} strokeDashoffset={C*(1-rp*0.94)} strokeLinecap="round"/>
             </svg>
             <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center' }}>
-              <span style={{ fontSize:'clamp(30px,4vw,40px)',fontWeight:900,color:'#fff',letterSpacing:-3,lineHeight:1 }}>{num}</span>
-              <span style={{ fontSize:'clamp(9px,1.1vw,10px)',color:'rgba(255,255,255,0.3)',letterSpacing:1 }}>/100</span>
+              <span style={{ fontSize:'clamp(36px,4.5vw,48px)',fontWeight:900,color:'#fff',letterSpacing:-3,lineHeight:1 }}>{num}</span>
+              <span style={{ fontSize:'clamp(11px,1.2vw,13px)',color:'rgba(255,255,255,0.3)',letterSpacing:1 }}>/100</span>
             </div>
           </div>
           <div style={{ textAlign:'center' }}>
-            <div style={{ fontSize:'clamp(10px,1.3vw,12px)',fontWeight:700,color:'#fff' }}>Clarity Score</div>
-            <div style={{ fontSize:'clamp(9px,1.1vw,10px)',color:'rgba(255,255,255,0.35)',marginTop:1 }}>This session</div>
+            <div style={{ fontSize:'clamp(12px,1.4vw,15px)',fontWeight:700,color:'#fff' }}>Clarity Score</div>
+            <div style={{ fontSize:'clamp(10px,1.1vw,12px)',color:'rgba(255,255,255,0.35)',marginTop:2 }}>This session</div>
           </div>
-          <div style={{ background:'#c8f53a',borderRadius:100,padding:'5px 12px',fontSize:'clamp(9px,1.2vw,11px)',fontWeight:800,color:'#0a0a0a',opacity:e>1800?1:0,transform:e>1800?'scale(1)':'scale(0.8)',transition:'all 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>
+          <div style={{ background:'#c8f53a',borderRadius:100,padding:'8px 18px',fontSize:'clamp(11px,1.3vw,14px)',fontWeight:800,color:'#0a0a0a',opacity:e>1800?1:0,transform:e>1800?'scale(1)':'scale(0.8)',transition:'all 0.4s cubic-bezier(0.34,1.56,0.64,1)' }}>
             🏆 Personal Best
           </div>
         </div>
-        <div style={{ flex:1,display:'flex',flexDirection:'column',gap:8,minWidth:120 }}>
-          <div style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:11,padding:'clamp(10px,1.5%,13px) clamp(12px,1.8%,15px)',opacity:e>2400?1:0,transform:e>2400?'translateY(0)':'translateY(10px)',transition:'all 0.5s ease' }}>
-            <div style={{ fontSize:'clamp(8px,1vw,9px)',fontWeight:600,color:'rgba(255,255,255,0.3)',letterSpacing:3,textTransform:'uppercase',marginBottom:9 }}>Last 5 Sessions</div>
-            <div style={{ display:'flex',alignItems:'flex-end',gap:4,height:40 }}>
+        <div style={{ flex:1,display:'flex',flexDirection:'column',gap:10,minWidth:150 }}>
+          <div style={{ background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:13,padding:'clamp(14px,2%,18px)',opacity:e>2400?1:0,transform:e>2400?'translateY(0)':'translateY(10px)',transition:'all 0.5s ease' }}>
+            <div style={{ fontSize:'clamp(9px,1.1vw,11px)',fontWeight:600,color:'rgba(255,255,255,0.3)',letterSpacing:3,textTransform:'uppercase',marginBottom:12 }}>Last 5 Sessions</div>
+            <div style={{ display:'flex',alignItems:'flex-end',gap:6,height:52 }}>
               {PROGRESS_DATA.map((val,i)=>{
-                const h=(val/100)*40
-                const isLast=i===PROGRESS_DATA.length-1
-                const delay=i*140
-                const shown=e>2500+delay
+                const h=(val/100)*52, isLast=i===PROGRESS_DATA.length-1
+                const delay=i*140, shown=e>2500+delay
                 return (
-                  <div key={i} style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3 }}>
-                    <div style={{ width:'100%',height:shown?h:0,background:isLast?'#c8f53a':'rgba(200,245,58,0.25)',borderRadius:3,transition:`height 0.5s ease ${delay}ms`,boxShadow:isLast?'0 0 8px rgba(200,245,58,0.35)':'none' }}/>
-                    <span style={{ fontSize:'clamp(8px,1vw,9px)',color:isLast?'#c8f53a':'rgba(255,255,255,0.2)',fontWeight:isLast?700:400 }}>{val}</span>
+                  <div key={i} style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4 }}>
+                    <div style={{ width:'100%',height:shown?h:0,background:isLast?'#c8f53a':'rgba(200,245,58,0.25)',borderRadius:3,transition:`height 0.5s ease ${delay}ms`,boxShadow:isLast?'0 0 10px rgba(200,245,58,0.35)':'none' }}/>
+                    <span style={{ fontSize:'clamp(9px,1.1vw,11px)',color:isLast?'#c8f53a':'rgba(255,255,255,0.2)',fontWeight:isLast?700:400 }}>{val}</span>
                   </div>
                 )
               })}
             </div>
           </div>
-          <div style={{ display:'flex',gap:7 }}>
+          <div style={{ display:'flex',gap:9 }}>
             {[{e:'🔥',n:'5',l:'Day streak',c:'#fff',d:3200},{e:'🪙',n:'+20',l:'Tokens',c:'#c8f53a',d:3500},{e:'📈',n:'↑23',l:'All time',c:'#60a5fa',d:3800}].map((s,i)=>(
-              <div key={i} style={{ flex:1,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:10,padding:'clamp(8px,1.2%,11px) clamp(9px,1.3%,12px)',opacity:e>s.d?1:0,transition:`opacity 0.4s ease ${i*0.1}s` }}>
-                <div style={{ fontSize:14 }}>{s.e}</div>
-                <div style={{ fontSize:'clamp(14px,2vw,18px)',fontWeight:900,color:s.c,letterSpacing:-1,marginTop:2 }}>{s.n}</div>
-                <div style={{ fontSize:'clamp(8px,1vw,10px)',color:'rgba(255,255,255,0.32)',marginTop:1 }}>{s.l}</div>
+              <div key={i} style={{ flex:1,background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.07)',borderRadius:12,padding:'clamp(12px,1.6%,16px)',opacity:e>s.d?1:0,transition:`opacity 0.4s ease ${i*0.1}s` }}>
+                <div style={{ fontSize:'clamp(16px,2vw,22px)' }}>{s.e}</div>
+                <div style={{ fontSize:'clamp(16px,2.2vw,22px)',fontWeight:900,color:s.c,letterSpacing:-1,marginTop:4 }}>{s.n}</div>
+                <div style={{ fontSize:'clamp(10px,1.1vw,12px)',color:'rgba(255,255,255,0.32)',marginTop:2 }}>{s.l}</div>
               </div>
             ))}
           </div>
@@ -544,21 +406,21 @@ function SceneOutro({ v }: { v:boolean }) {
   return (
     <div style={{ position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:v?1:0,transition:'opacity 0.6s ease' }}>
       <div style={{ position:'absolute',inset:0,background:'radial-gradient(ellipse 60% 50% at 50% 50%,rgba(200,245,58,0.09) 0%,transparent 70%)' }}/>
-      <div style={{ fontSize:'clamp(38px,6.5vw,72px)',fontWeight:900,color:'#fff',letterSpacing:-4,lineHeight:0.92,textAlign:'center',marginBottom:14,transform:v?'translateY(0)':'translateY(28px)',transition:'transform 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s' }}>
+      <div style={{ fontSize:'clamp(48px,7vw,88px)',fontWeight:900,color:'#fff',letterSpacing:-4,lineHeight:0.92,textAlign:'center',marginBottom:18,transform:v?'translateY(0)':'translateY(28px)',transition:'transform 0.7s cubic-bezier(0.34,1.56,0.64,1) 0.1s' }}>
         Own <span style={{ color:'#c8f53a' }}>the</span><br/>room.
       </div>
-      <div style={{ fontSize:'clamp(9px,1.2vw,11px)',color:'rgba(255,255,255,0.25)',letterSpacing:5,textTransform:'uppercase',marginBottom:24,opacity:v?1:0,transition:'opacity 0.5s ease 0.4s' }}>vocalis-zeta.vercel.app</div>
-      <div style={{ display:'flex',alignItems:'center',gap:14,opacity:v?1:0,transition:'opacity 0.5s ease 0.7s' }}>
-        <div style={{ display:'flex',alignItems:'center',gap:9 }}>
-          <div style={{ width:30,height:30,background:'#c8f53a',borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center' }}>
-            <div style={{ display:'flex',gap:2.5,alignItems:'center' }}>
-              {[7,12,16,12,7].map((h,i)=><div key={i} style={{ width:2.5,height:h,background:'#0a0a0a',borderRadius:1.5 }}/>)}
+      <div style={{ fontSize:'clamp(11px,1.3vw,14px)',color:'rgba(255,255,255,0.28)',letterSpacing:5,textTransform:'uppercase',marginBottom:28,opacity:v?1:0,transition:'opacity 0.5s ease 0.4s' }}>vocalis-zeta.vercel.app</div>
+      <div style={{ display:'flex',alignItems:'center',gap:18,opacity:v?1:0,transition:'opacity 0.5s ease 0.7s' }}>
+        <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+          <div style={{ width:36,height:36,background:'#c8f53a',borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center' }}>
+            <div style={{ display:'flex',gap:3,alignItems:'center' }}>
+              {[8,13,17,13,8].map((h,i)=><div key={i} style={{ width:3,height:h,background:'#0a0a0a',borderRadius:1.5 }}/>)}
             </div>
           </div>
-          <span style={{ fontSize:'clamp(18px,2.5vw,22px)',fontWeight:900,color:'#fff',letterSpacing:-1 }}>Vocalis</span>
+          <span style={{ fontSize:'clamp(20px,2.5vw,28px)',fontWeight:900,color:'#fff',letterSpacing:-1 }}>Vocalis</span>
         </div>
-        <div style={{ width:1,height:20,background:'rgba(255,255,255,0.1)' }}/>
-        <span style={{ fontSize:'clamp(10px,1.3vw,12px)',color:'rgba(255,255,255,0.4)',fontWeight:500 }}>Start free today →</span>
+        <div style={{ width:1,height:24,background:'rgba(255,255,255,0.1)' }}/>
+        <span style={{ fontSize:'clamp(12px,1.4vw,15px)',color:'rgba(255,255,255,0.4)',fontWeight:500 }}>Start free today →</span>
       </div>
     </div>
   )
@@ -566,20 +428,23 @@ function SceneOutro({ v }: { v:boolean }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function HowItWorksSection() {
-  const sectionRef   = useRef<HTMLDivElement>(null)
-  const rafRef       = useRef<number>(0)
-  const startTimeRef = useRef<number>(0)
-  const audioRef     = useRef<HTMLAudioElement|null>(null)
-  const audioCtxRef  = useRef<AudioContext|null>(null)
-  const stopMusicRef = useRef<(()=>void)|null>(null)
+  const sectionRef    = useRef<HTMLDivElement>(null)
+  const demoWindowRef = useRef<HTMLDivElement>(null)
+  const rafRef        = useRef<number>(0)
+  const startTimeRef  = useRef<number>(0)
+  const audioRef      = useRef<HTMLAudioElement|null>(null)
+  const audioCtxRef   = useRef<AudioContext|null>(null)
+  const stopMusicRef  = useRef<(()=>void)|null>(null)
 
   const [started,      setStarted]      = useState(false)
   const [audioReady,   setAudioReady]   = useState(false)
   const [elapsed,      setElapsed]      = useState(0)
   const [sceneId,      setSceneId]      = useState('brand')
   const [sceneElapsed, setSceneElapsed] = useState(0)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [,             forceRender]     = useState(0)
 
+  // Pre-fetch ElevenLabs audio
   useEffect(()=>{
     let dead=false
     async function go() {
@@ -594,6 +459,13 @@ export default function HowItWorksSection() {
     }
     go()
     return ()=>{dead=true}
+  },[])
+
+  // Track fullscreen changes
+  useEffect(()=>{
+    const handler=()=>setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange',handler)
+    return ()=>document.removeEventListener('fullscreenchange',handler)
   },[])
 
   const rafTick=useCallback(()=>{
@@ -623,7 +495,7 @@ export default function HowItWorksSection() {
       stopMusicRef.current=createDemoMusic(ctx)
     } catch {}
 
-    // Play voice over music
+    // Play voice
     if (audioReady&&audioRef.current) {
       audioRef.current.play().catch(()=>{})
     } else if ('speechSynthesis' in window) {
@@ -640,6 +512,24 @@ export default function HowItWorksSection() {
     }
   },[rafTick,audioReady])
 
+  // Go fullscreen AND start demo when play is clicked
+  const handlePlay=useCallback(()=>{
+    if (demoWindowRef.current && demoWindowRef.current.requestFullscreen) {
+      demoWindowRef.current.requestFullscreen().catch(()=>{})
+    }
+    startDemo()
+  },[startDemo])
+
+  // Fullscreen button toggle
+  const toggleFullscreen=useCallback(()=>{
+    if (!document.fullscreenElement) {
+      demoWindowRef.current?.requestFullscreen().catch(()=>{})
+    } else {
+      document.exitFullscreen().catch(()=>{})
+    }
+  },[])
+
+  // Auto-play on scroll into view (without fullscreen — user hasn't clicked)
   useEffect(()=>{
     const obs=new IntersectionObserver(([e])=>{if(e.isIntersecting&&!started)startDemo()},{threshold:0.5})
     if (sectionRef.current) obs.observe(sectionRef.current)
@@ -678,28 +568,44 @@ export default function HowItWorksSection() {
           </div>
         </div>
 
-        {/* Demo window — centered, max width, 16:9 */}
-        <div style={{ width:'100%',maxWidth:900,margin:'0 auto' }}>
-          <div style={{ position:'relative',borderRadius:16,overflow:'hidden',border:'1px solid rgba(255,255,255,0.08)',boxShadow:'0 0 80px rgba(200,245,58,0.07),0 32px 64px rgba(0,0,0,0.75)',background:'#0d0d0d',aspectRatio:'16/9' }}>
+        {/* Demo window — centered */}
+        <div style={{ width:'100%',maxWidth:920,margin:'0 auto' }}>
+          <div
+            ref={demoWindowRef}
+            style={{ position:'relative',borderRadius:isFullscreen?0:16,overflow:'hidden',border:isFullscreen?'none':'1px solid rgba(255,255,255,0.08)',boxShadow:isFullscreen?'none':'0 0 80px rgba(200,245,58,0.07),0 32px 64px rgba(0,0,0,0.75)',background:'#0d0d0d',aspectRatio:isFullscreen?undefined:'16/9',height:isFullscreen?'100%':undefined }}
+          >
             {/* Grid bg */}
             <div style={{ position:'absolute',inset:0,backgroundImage:'linear-gradient(rgba(200,245,58,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(200,245,58,0.015) 1px,transparent 1px)',backgroundSize:'52px 52px' }}/>
+
             {/* Browser chrome */}
-            <div style={{ position:'absolute',top:0,left:0,right:0,height:'clamp(32px,5%,42px)',background:'rgba(0,0,0,0.75)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',padding:'0 clamp(10px,2%,16px)',gap:8,zIndex:10 }}>
-              <div style={{ display:'flex',gap:4.5 }}>{['#ff5f57','#ffbd2e','#28ca41'].map(c=><div key={c} style={{ width:'clamp(6px,1.2%,9px)',height:'clamp(6px,1.2%,9px)',borderRadius:'50%',background:c,opacity:0.65 }}/>)}</div>
+            <div style={{ position:'absolute',top:0,left:0,right:0,height:42,background:'rgba(0,0,0,0.75)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,0.06)',display:'flex',alignItems:'center',padding:'0 clamp(12px,2%,18px)',gap:10,zIndex:10 }}>
+              <div style={{ display:'flex',gap:5 }}>{['#ff5f57','#ffbd2e','#28ca41'].map(c=><div key={c} style={{ width:9,height:9,borderRadius:'50%',background:c,opacity:0.65 }}/>)}</div>
               <div style={{ flex:1,display:'flex',justifyContent:'center' }}>
-                <div style={{ background:'rgba(255,255,255,0.05)',borderRadius:5,padding:'2px 12px',fontSize:'clamp(8px,1.1%,10px)',color:'rgba(255,255,255,0.25)' }}>vocalis-zeta.vercel.app</div>
+                <div style={{ background:'rgba(255,255,255,0.05)',borderRadius:5,padding:'2px 14px',fontSize:10,color:'rgba(255,255,255,0.25)' }}>vocalis-zeta.vercel.app</div>
               </div>
-              <div style={{ display:'flex',alignItems:'center',gap:6 }}>
-                <div style={{ width:'clamp(16px,2.5%,22px)',height:'clamp(16px,2.5%,22px)',background:'#c8f53a',borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center' }}>
+              <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+                <div style={{ width:22,height:22,background:'#c8f53a',borderRadius:5,display:'flex',alignItems:'center',justifyContent:'center' }}>
                   <div style={{ display:'flex',gap:1.5,alignItems:'center' }}>{[5,8,11,8,5].map((h,i)=><div key={i} style={{ width:1.5,height:h,background:'#0a0a0a',borderRadius:1 }}/>)}</div>
                 </div>
-                <span style={{ fontSize:'clamp(9px,1.3%,12px)',fontWeight:800,color:'#fff' }}>Vocalis</span>
-                <div style={{ fontSize:'clamp(8px,1%,10px)',fontWeight:700,color:'#0a0a0a',background:'#c8f53a',borderRadius:100,padding:'2px 8px',marginLeft:2 }}>New Rep →</div>
+                <span style={{ fontSize:12,fontWeight:800,color:'#fff' }}>Vocalis</span>
+                <div style={{ fontSize:10,fontWeight:700,color:'#0a0a0a',background:'#c8f53a',borderRadius:100,padding:'2px 10px',marginLeft:2 }}>New Rep →</div>
+
+                {/* Fullscreen button */}
+                <button
+                  onClick={toggleFullscreen}
+                  title={isFullscreen?'Exit fullscreen':'Go fullscreen'}
+                  style={{ marginLeft:6,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',borderRadius:6,width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,transition:'all 0.2s' }}
+                >
+                  {isFullscreen
+                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m8 0h3a2 2 0 0 0 2-2v-3"/></svg>
+                  }
+                </button>
               </div>
             </div>
 
             {/* Scenes */}
-            <div style={{ position:'absolute',inset:'clamp(32px,5%,42px) 0 0 0' }}>
+            <div style={{ position:'absolute',inset:'42px 0 0 0' }}>
               <SceneBrand      v={sceneId==='brand'} />
               <SceneProblem    v={sceneId==='problem'}    e={sceneElapsed} />
               <ScenePractice   v={sceneId==='practice'}   e={sceneElapsed} />
@@ -710,41 +616,54 @@ export default function HowItWorksSection() {
             </div>
 
             {/* Scene dots */}
-            <div style={{ position:'absolute',bottom:10,left:'50%',transform:'translateX(-50%)',display:'flex',gap:5,zIndex:10 }}>
-              {SCENES.map(s=><div key={s.id} style={{ width:sceneId===s.id?15:5,height:5,borderRadius:3,background:sceneId===s.id?'#c8f53a':'rgba(255,255,255,0.15)',transition:'all 0.35s ease' }}/>)}
+            <div style={{ position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',display:'flex',gap:5,zIndex:10 }}>
+              {SCENES.map(s=><div key={s.id} style={{ width:sceneId===s.id?16:5,height:5,borderRadius:3,background:sceneId===s.id?'#c8f53a':'rgba(255,255,255,0.15)',transition:'all 0.35s ease' }}/>)}
             </div>
 
-            {/* Pre-start overlay */}
+            {/* Fullscreen progress bar overlay */}
+            {isFullscreen&&(
+              <div style={{ position:'absolute',bottom:0,left:0,right:0,height:3,background:'rgba(255,255,255,0.06)',zIndex:10 }}>
+                <div style={{ height:'100%',width:`${(elapsed/TOTAL_MS)*100}%`,background:'linear-gradient(90deg,#c8f53a,#a8e020)',transition:'width 0.1s linear' }}/>
+              </div>
+            )}
+
+            {/* Pre-start overlay — clicking here goes fullscreen */}
             {!started&&(
-              <div onClick={startDemo} style={{ position:'absolute',inset:0,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,10,0.9)',backdropFilter:'blur(6px)',cursor:'pointer' }}>
-                <div style={{ width:'clamp(52px,8%,68px)',height:'clamp(52px,8%,68px)',borderRadius:'50%',background:'#c8f53a',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 48px rgba(200,245,58,0.45)',marginBottom:12 }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21"/></svg>
+              <div onClick={handlePlay} style={{ position:'absolute',inset:0,zIndex:20,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'rgba(10,10,10,0.9)',backdropFilter:'blur(6px)',cursor:'pointer' }}>
+                <div style={{ width:70,height:70,borderRadius:'50%',background:'#c8f53a',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 0 50px rgba(200,245,58,0.45)',marginBottom:14 }}>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="#0a0a0a"><polygon points="5,3 19,12 5,21"/></svg>
                 </div>
-                <span style={{ fontSize:'clamp(12px,1.8%,15px)',color:'rgba(255,255,255,0.6)',fontWeight:600,marginBottom:5 }}>Watch the demo</span>
-                <span style={{ fontSize:'clamp(10px,1.4%,12px)',color:'rgba(255,255,255,0.22)' }}>
-                  {audioReady?'48 seconds · AI voice + music':'48 seconds · loading...'}
+                <span style={{ fontSize:'clamp(13px,1.8vw,16px)',color:'rgba(255,255,255,0.65)',fontWeight:600,marginBottom:6 }}>Watch the demo</span>
+                <span style={{ fontSize:'clamp(10px,1.3vw,13px)',color:'rgba(255,255,255,0.28)' }}>
+                  {audioReady?'48 seconds · AI voice + music  ⛶ opens fullscreen':'48 seconds · loading voice...'}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Progress bar */}
-          <div style={{ height:2,background:'rgba(255,255,255,0.06)',borderRadius:1,overflow:'hidden' }}>
-            <div style={{ height:'100%',width:`${(elapsed/TOTAL_MS)*100}%`,background:'linear-gradient(90deg,#c8f53a,#a8e020)',transition:'width 0.1s linear' }}/>
-          </div>
+          {/* Progress bar (non-fullscreen) */}
+          {!isFullscreen&&(
+            <div style={{ height:2,background:'rgba(255,255,255,0.06)',borderRadius:1,overflow:'hidden' }}>
+              <div style={{ height:'100%',width:`${(elapsed/TOTAL_MS)*100}%`,background:'linear-gradient(90deg,#c8f53a,#a8e020)',transition:'width 0.1s linear' }}/>
+            </div>
+          )}
 
           {/* Labels */}
-          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:12,flexWrap:'wrap',gap:8 }}>
-            <div style={{ display:'flex',gap:'clamp(10px,3vw,24px)',flexWrap:'wrap' }}>
-              {STEP_LABELS.map(({id,label})=>(
-                <div key={id} style={{ display:'flex',alignItems:'center',gap:6 }}>
-                  <div style={{ width:6,height:6,borderRadius:'50%',background:sceneId===id?'#c8f53a':'rgba(255,255,255,0.17)',boxShadow:sceneId===id?'0 0 7px rgba(200,245,58,0.7)':'none',transition:'all 0.3s',flexShrink:0 }}/>
-                  <span style={{ fontSize:11,color:sceneId===id?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.27)',fontWeight:500,transition:'color 0.3s' }}>{label}</span>
-                </div>
-              ))}
+          {!isFullscreen&&(
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:12,flexWrap:'wrap',gap:8 }}>
+              <div style={{ display:'flex',gap:'clamp(10px,3vw,24px)',flexWrap:'wrap' }}>
+                {STEP_LABELS.map(({id,label})=>(
+                  <div key={id} style={{ display:'flex',alignItems:'center',gap:6 }}>
+                    <div style={{ width:6,height:6,borderRadius:'50%',background:sceneId===id?'#c8f53a':'rgba(255,255,255,0.17)',boxShadow:sceneId===id?'0 0 7px rgba(200,245,58,0.7)':'none',transition:'all 0.3s',flexShrink:0 }}/>
+                    <span style={{ fontSize:11,color:sceneId===id?'rgba(255,255,255,0.7)':'rgba(255,255,255,0.27)',fontWeight:500,transition:'color 0.3s' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize:10,color:'rgba(255,255,255,0.17)',fontWeight:500 }}>
+                {audioReady?'🎙 AI voice  🎵 music':'48s walkthrough'}
+              </span>
             </div>
-            <span style={{ fontSize:10,color:'rgba(255,255,255,0.17)',fontWeight:500 }}>{audioReady?'🎙 AI voice  🎵 music':'48s walkthrough'}</span>
-          </div>
+          )}
         </div>
       </div>
     </section>
