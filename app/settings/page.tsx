@@ -4,11 +4,13 @@ import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getSettings, saveSettings, signOut, applyTheme } from '@/lib/db'
 import type { UserSettings } from '@/lib/types'
+import { validateDisplayName } from '@/lib/profanityFilter'
 
 export default function SettingsPage() {
   const router = useRouter()
   const [s, setS] = useState<UserSettings | null>(null)
   const [saved, setSaved] = useState(false)
+  const [saveErr, setSaveErr] = useState('')
   const [del, setDel] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
 
@@ -20,6 +22,7 @@ export default function SettingsPage() {
     if (!s) return
     setS({ ...s, ...p })
     setSaved(false)
+    setSaveErr('')
   }
 
   const handleTheme = (theme: 'dark' | 'light') => {
@@ -29,6 +32,12 @@ export default function SettingsPage() {
 
   const handleSave = async () => {
     if (!s) return
+    const nameError = validateDisplayName(s.name)
+    if (nameError) {
+      setSaveErr(nameError)
+      return
+    }
+    setSaveErr('')
     await saveSettings(s)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -37,7 +46,6 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     setLoggingOut(true)
     await signOut()
-    // Force hard redirect to clear all state
     window.location.href = '/auth'
   }
 
@@ -151,14 +159,19 @@ export default function SettingsPage() {
         </div>
 
         {/* Save */}
-        <div className="anim-slide-up anim-d4" style={{ marginBottom: '20px' }}>
+        <div className="anim-slide-up anim-d4" style={{ marginBottom: '8px' }}>
+          {saveErr && (
+            <div style={{ background: 'rgba(255,48,84,.08)', border: '1px solid rgba(255,48,84,.2)', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', color: 'var(--hot)', marginBottom: '12px' }}>
+              {saveErr}
+            </div>
+          )}
           <button className="btn btn-primary btn-full" onClick={handleSave} style={{ padding: '16px', fontSize: '16px' }}>
             {saved ? '✓ Settings Saved' : 'Save Changes'}
           </button>
         </div>
 
         {/* Logout */}
-        <div className="anim-slide-up anim-d5" style={{ marginBottom: '20px' }}>
+        <div className="anim-slide-up anim-d5" style={{ marginBottom: '20px', marginTop: '12px' }}>
           <button
             className="btn btn-outline btn-full"
             onClick={handleLogout}
@@ -183,6 +196,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
       </div>
     </>
   )

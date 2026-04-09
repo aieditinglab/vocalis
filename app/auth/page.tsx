@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase'
+import { validateDisplayName } from '@/lib/profanityFilter'
 
 function AuthPageInner() {
   const [mode, setMode]           = useState<'signup' | 'login'>('signup')
@@ -24,6 +25,10 @@ function AuthPageInner() {
 
   const validate = () => {
     if (mode === 'signup' && !name.trim()) { setErr('Please enter your first name.'); return false }
+    if (mode === 'signup') {
+      const nameError = validateDisplayName(name.trim())
+      if (nameError) { setErr(nameError); return false }
+    }
     if (!email.trim().match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) { setErr('Please enter a valid email address.'); return false }
     if (pass.length < 6) { setErr('Password must be at least 6 characters.'); return false }
     return true
