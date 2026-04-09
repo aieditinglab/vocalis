@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { createClient } from '@/lib/supabase'
 import { validateDisplayName } from '@/lib/profanityFilter'
@@ -12,6 +13,7 @@ function AuthPageInner() {
   const [email, setEmail]         = useState('')
   const [pass, setPass]           = useState('')
   const [showPass, setShowPass]   = useState(false)
+  const [agreed, setAgreed]       = useState(false)
   const [err, setErr]             = useState('')
   const [loading, setLoading]     = useState(false)
   const [countdown, setCountdown] = useState(0)
@@ -31,6 +33,7 @@ function AuthPageInner() {
     }
     if (!email.trim().match(/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) { setErr('Please enter a valid email address.'); return false }
     if (pass.length < 6) { setErr('Password must be at least 6 characters.'); return false }
+    if (mode === 'signup' && !agreed) { setErr('You must agree to the Terms of Service and Privacy Policy to create an account.'); return false }
     return true
   }
 
@@ -245,14 +248,47 @@ function AuthPageInner() {
               </div>
             </div>
 
+            {/* Terms agreement — signup only */}
+            {mode === 'signup' && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', cursor: 'pointer', padding: '14px', background: agreed ? 'rgba(170,255,0,.05)' : 'var(--card)', border: `1px solid ${agreed ? 'rgba(170,255,0,.3)' : 'var(--border)'}`, borderRadius: '12px', transition: 'all .2s' }}>
+                <div style={{ position: 'relative', flexShrink: 0, marginTop: '1px' }}>
+                  <input
+                    type="checkbox"
+                    checked={agreed}
+                    onChange={e => { setAgreed(e.target.checked); setErr('') }}
+                    style={{ opacity: 0, position: 'absolute', width: '20px', height: '20px', cursor: 'pointer' }}
+                  />
+                  <div style={{
+                    width: '20px', height: '20px', borderRadius: '6px',
+                    border: `2px solid ${agreed ? 'var(--accent)' : 'var(--border-light)'}`,
+                    background: agreed ? 'var(--accent)' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all .15s'
+                  }}>
+                    {agreed && (
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M2 6l3 3 5-5" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span style={{ fontSize: '13px', lineHeight: 1.6, color: 'var(--text-muted)' }}>
+                  I am at least 13 years old and I agree to Vocalis&apos;s{' '}
+                  <Link href="/terms" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'underline', fontWeight: 600 }}>Terms of Service</Link>
+                  {' '}and{' '}
+                  <Link href="/privacy" target="_blank" style={{ color: 'var(--accent)', textDecoration: 'underline', fontWeight: 600 }}>Privacy Policy</Link>.
+                </span>
+              </label>
+            )}
+
             {err && (
               <div style={{ background: 'rgba(255,48,84,.08)', border: '1px solid rgba(255,48,84,.2)', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', color: 'var(--hot)', lineHeight: 1.5 }}>
                 {err}
               </div>
             )}
 
-            <button className="btn btn-primary btn-full" onClick={handleSubmit} disabled={loading}
-              style={{ padding: '18px', fontSize: '16px', marginTop: '4px', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
+            <button className="btn btn-primary btn-full" onClick={handleSubmit} disabled={loading || (mode === 'signup' && !agreed)}
+              style={{ padding: '18px', fontSize: '16px', marginTop: '4px', opacity: (loading || (mode === 'signup' && !agreed)) ? 0.5 : 1, cursor: (loading || (mode === 'signup' && !agreed)) ? 'not-allowed' : 'pointer' }}>
               {loading
                 ? (mode === 'signup' ? 'Creating account...' : 'Logging in...')
                 : (mode === 'signup' ? 'Create Account →' : 'Log In →')}
