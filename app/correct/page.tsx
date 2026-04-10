@@ -2,8 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { getPendingSession, clearPendingSession } from '@/lib/db'
-import { saveSession } from '@/lib/db'
+import { getPendingSession, clearPendingSession, saveSession, computeTokensForSession } from '@/lib/db'
 import Link from 'next/link'
 
 export default function CorrectPage() {
@@ -34,20 +33,25 @@ export default function CorrectPage() {
 
     try {
       if (pending) {
+        const clarityScore = pending.clarityScore ?? pending.clarity_score ?? 0
+        const duration     = pending.duration || 0
+        const fillerCount  = pending.fillerCount ?? pending.filler_count ?? 0
+        const tokensEarned = computeTokensForSession(clarityScore, duration, fillerCount)
+
         const sessionToSave = {
-          id: pending.id && pending.id.match(/^[0-9a-f-]{36}$/) ? pending.id : crypto.randomUUID(),
-          date: pending.date || new Date().toISOString(),
-          category: pending.category || 'General',
-          prompt: pending.prompt || '',
-          duration: pending.duration || 0,
-          fillerCount: pending.fillerCount ?? pending.filler_count ?? 0,
-          fillerWords: pending.fillerWords || pending.filler_words || [],
-          pace: pending.pace || 0,
-          clarityScore: pending.clarityScore ?? pending.clarity_score ?? 0,
-          lengthStatus: pending.lengthStatus || pending.length_status || 'in-range',
-          feedback: feedback,
+          id:              crypto.randomUUID(),
+          date:            pending.date || new Date().toISOString(),
+          category:        pending.category || 'General',
+          prompt:          pending.prompt || '',
+          duration,
+          fillerCount,
+          fillerWords:     pending.fillerWords || pending.filler_words || [],
+          pace:            pending.pace || 0,
+          clarityScore,
+          lengthStatus:    pending.lengthStatus || pending.length_status || 'in-range',
+          feedback,
           transcriptPreview: pending.transcriptPreview || pending.transcript_preview || '',
-          tokensEarned: pending.tokensEarned || 10,
+          tokensEarned,
         }
 
         const ok = await saveSession(sessionToSave)
@@ -56,7 +60,7 @@ export default function CorrectPage() {
           setSaved(true)
           clearPendingSession()
         } else {
-          setSaveError('Could not save session — check your connection.')
+          setSaveError('Could not save session — check your connection and try again.')
         }
       }
     } catch (e) {
@@ -146,8 +150,7 @@ export default function CorrectPage() {
         )}
 
         {feedback.length > 0 && (
-          <div className="btn-pair anim-slide-up anim-d6">
-
+          <div className="anim-slide-up anim-d6" style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '12px' }}>
             <button className="btn btn-primary btn-lg btn-full" onClick={handleReRecord}>
               🎤 Apply &amp; Re-Record
             </button>

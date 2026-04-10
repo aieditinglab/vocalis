@@ -390,3 +390,28 @@ body::before{content:'';position:fixed;inset:0;background-image:radial-gradient(
   .compare-4           { grid-template-columns: 1fr !important; }
   .bests-grid          { grid-template-columns: 1fr !important; }
 }
+
+/* Legal pages table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 8px;
+}
+table th {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--border);
+  background: var(--card2);
+}
+table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-muted);
+  vertical-align: top;
+}
+table tr:last-child td {
+  border-bottom: none;
+}

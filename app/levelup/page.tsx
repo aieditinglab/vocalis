@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
-import { getSessions, addTokens, getUser } from '@/lib/db'
+import { getSessions, addTokens, getUser, computeTokensForSession } from '@/lib/db'
 import { generateCoaching, detectPersonalBests, getCelebrationMessage } from '@/lib/coachingEngine'
 import type { Session } from '@/lib/types'
 

@@ -390,6 +390,15 @@ export async function getPracticeStats() {
 }
 
 // ── STATS ──────────────────────────────────────────────────────────────────
+export function computeTokensForSession(clarityScore: number, duration: number, fillerCount: number): number {
+  let t = 10
+  if (clarityScore >= 85) t += 20
+  else if (clarityScore >= 70) t += 12
+  else if (clarityScore >= 55) t += 6
+  if (duration >= 60) t += 5
+  if (fillerCount === 0) t += 10
+  return t
+}
 
 export function computeStats(sessions: Session[]) {
   if (!sessions.length) return null
