@@ -10,15 +10,6 @@ function fmt(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 }
 
-function tokensForSession(clarity: number, duration: number, fillerCount: number): number {
-  let t = 10
-  if (clarity >= 85) t += 20
-  else if (clarity >= 70) t += 12
-  else if (clarity >= 55) t += 6
-  if (duration >= 60) t += 5
-  if (fillerCount === 0) t += 10
-  return t
-}
 
 export default function LevelUpPage() {
   const router = useRouter()
@@ -54,7 +45,7 @@ export default function LevelUpPage() {
       setBests(pb)
       setCelebration(getCelebrationMessage(latest.clarityScore, pb, previousSessions.length === 0))
 
-      const earned = tokensForSession(latest.clarityScore, latest.duration, latest.fillerCount)
+      const earned = computeTokensForSession(latest.clarityScore, latest.duration, latest.fillerCount)
       setTokens(earned)
 
       // Add tokens (only if this is a fresh session — within last 2 minutes)

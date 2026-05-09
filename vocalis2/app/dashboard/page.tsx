@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getSessions, computeStats, computeStreak, getSettings, deleteSession } from '@/lib/db'
@@ -281,8 +282,7 @@ export default function DashboardPage() {
 }
 
 function DashChart({ sessions }: { sessions: Session[] }) {
-  const { useEffect } = require('react')
-  useEffect(() => {
+  React.useEffect(() => {
     const pts = sessions.slice(0, 10).map(s => s.clarityScore).reverse()
     if (pts.length < 2) return
     const W = 600, H = 80

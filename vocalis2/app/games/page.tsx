@@ -15,6 +15,8 @@ export default function GamesPage(){
 
   const play=(id:GameId,cost:number)=>{
     if(tokens<cost){alert(`You need ${cost} tokens to play this game. Earn more by recording sessions!`);return}
+    if(cost>0&&!spendTokens(cost,`Played ${id}`)){alert('Not enough tokens.');return}
+    setTokens(getTokenBalance())
     setActive(id)
   }
 
@@ -30,9 +32,16 @@ export default function GamesPage(){
     'word-association':{title:'Word Association',desc:'A word appears. Type the first connected word that comes to mind, as fast as possible. Builds mental agility and natural language flow.',    cost:10,reward:20,icon:'🔗',color:'var(--blue)'},
   }
 
-  if(active==='memory-chain')    return<MemoryChain    onBack={()=>setActive('none')} onFinish={(s)=>{handleShare('memory-chain',s);setActive('none')}}/>
-  if(active==='speed-describe')  return<SpeedDescribe  onBack={()=>setActive('none')} onFinish={(s)=>{handleShare('speed-describe',s);setActive('none')}}/>
-  if(active==='word-association')return<WordAssociation onBack={()=>setActive('none')} onFinish={(s)=>{handleShare('word-association',s);setActive('none')}}/>
+  const finishGame=(id:string,s:number,reward:number)=>{
+    addTokens(reward,`${id} reward`)
+    setTokens(getTokenBalance())
+    handleShare(id,s)
+    setActive('none')
+  }
+
+  if(active==='memory-chain')    return<MemoryChain    onBack={()=>setActive('none')} onFinish={(s)=>finishGame('memory-chain',s,GAME_INFO['memory-chain'].reward)}/>
+  if(active==='speed-describe')  return<SpeedDescribe  onBack={()=>setActive('none')} onFinish={(s)=>finishGame('speed-describe',s,GAME_INFO['speed-describe'].reward)}/>
+  if(active==='word-association')return<WordAssociation onBack={()=>setActive('none')} onFinish={(s)=>finishGame('word-association',s,GAME_INFO['word-association'].reward)}/>
 
   return(<>
     <Nav showApp/>

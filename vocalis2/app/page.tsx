@@ -55,5 +55,17 @@ export default function LandingPage(){
       <p className="text-muted" style={{fontSize:'18px',marginBottom:'36px'}}>Let&apos;s prove it.</p>
       <Link href="/auth" className="btn btn-primary btn-lg">Start Training — It&apos;s Free</Link>
     </div>
+    <footer style={{borderTop:'1px solid var(--border)',padding:'32px 40px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'16px',maxWidth:'1100px',margin:'0 auto'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'10px',color:'var(--text-muted)',fontSize:'13px'}}>
+        <span style={{color:'var(--accent)',fontWeight:700,fontFamily:'var(--font-display)'}}>VOCALIS</span>
+        <span>·</span>
+        <span>Built for teens. Powered by AI.</span>
+      </div>
+      <div style={{display:'flex',gap:'18px',fontSize:'13px',color:'var(--text-muted)'}}>
+        <Link href="/auth" style={{color:'inherit',textDecoration:'none'}}>Sign in</Link>
+        <a href="mailto:aieditinglab@gmail.com" style={{color:'inherit',textDecoration:'none'}}>Contact</a>
+        <span>© {new Date().getFullYear()}</span>
+      </div>
+    </footer>
   </>)
 }
