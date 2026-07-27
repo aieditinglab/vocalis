@@ -1,16 +1,19 @@
 'use client'
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { PROMPTS } from '@/lib/types'
 import { setPendingSession } from '@/lib/db'
 
+// Free practice, deliberately separate from the roadmap. Every category accepts
+// a script or rubric — the AP-student case is "I have a real speech next week".
 const CATS = [
-  { key: 'Job Interviews',        icon: '💼', desc: 'Interview prep and pitch practice', allowFiles: false },
-  { key: 'College Interviews',    icon: '🎓', desc: 'Common admissions questions', allowFiles: false },
-  { key: 'School Presentations',  icon: '📚', desc: 'Upload your script, slides, or rubric', allowFiles: true },
-  { key: 'Public Speaking',       icon: '🎤', desc: 'Presentations, debates, and speeches', allowFiles: true },
-  { key: 'My Own Prompt',         icon: '✏️', desc: 'Upload your own content to practice with', allowFiles: true },
+  { key: 'My Own Prompt',         label: 'My own topic',        icon: '✏️', desc: 'Your own topic, speech, or script', allowFiles: true },
+  { key: 'School Presentations',  label: 'School presentation', icon: '📚', desc: 'Upload your script, slides, or rubric', allowFiles: true },
+  { key: 'Job Interviews',        label: 'Job interview',       icon: '💼', desc: 'Interview prep and pitch practice', allowFiles: true },
+  { key: 'College Interviews',    label: 'College interview',   icon: '🎓', desc: 'Common admissions questions', allowFiles: true },
+  { key: 'Public Speaking',       label: 'Public speaking',     icon: '🎤', desc: 'Presentations, debates, and speeches', allowFiles: true },
 ]
 
 export default function RecordPage() {
@@ -77,13 +80,27 @@ export default function RecordPage() {
     <>
       <Nav showApp />
       <div className="container">
-        <p className="eyebrow anim-slide-up anim-d1">STEP 1 OF 5 — VOICE</p>
+        <p className="eyebrow anim-slide-up anim-d1">CUSTOM PRACTICE</p>
         <h1 className="font-display anim-slide-up anim-d2" style={{ fontSize: 'clamp(38px,5vw,52px)', fontWeight: 900, letterSpacing: '-.04em', marginBottom: '8px' }}>
-          Pick a category.
+          Practice your own topic.
         </h1>
-        <p className="text-muted anim-slide-up anim-d2" style={{ fontSize: '16px', marginBottom: '32px' }}>
-          What are you practicing for today?
+        <p className="text-muted anim-slide-up anim-d2" style={{ fontSize: '16px', marginBottom: '20px', lineHeight: 1.6 }}>
+          Got a real presentation, speech, or interview coming up? Bring it here. Paste or upload your
+          script and the AI checks your delivery against what you actually prepared.
         </p>
+
+        <div className="anim-slide-up anim-d2" style={{
+          background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '14px',
+          padding: '14px 18px', marginBottom: '32px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap',
+        }}>
+          <span className="text-muted" style={{ fontSize: '13.5px' }}>
+            Working through the lessons instead?
+          </span>
+          <Link href="/roadmap" style={{ color: 'var(--accent)', fontSize: '13.5px', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
+            Continue your roadmap →
+          </Link>
+        </div>
 
         {/* Category grid */}
         <div className="anim-slide-up anim-d3" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
@@ -94,7 +111,7 @@ export default function RecordPage() {
                 <span style={{ fontSize: '28px' }}>{cat.icon}</span>
                 {cat.allowFiles && <span style={{ fontSize: '11px', background: 'rgba(170,255,0,.1)', color: 'var(--accent)', padding: '3px 8px', borderRadius: '100px', fontWeight: 700 }}>📎 Upload</span>}
               </div>
-              <span style={{ fontWeight: 600, fontSize: '16px', textAlign: 'left' }}>{cat.key}</span>
+              <span style={{ fontWeight: 600, fontSize: '16px', textAlign: 'left' }}>{cat.label}</span>
               <span style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'left' }}>{cat.desc}</span>
             </button>
           ))}
@@ -123,8 +140,12 @@ export default function RecordPage() {
 
         {selected === 'My Own Prompt' && (
           <div className="anim-slide-up anim-d1" style={{ marginBottom: '20px' }}>
-            <label className="input-label">Your prompt or topic</label>
-            <input className="input" type="text" placeholder="e.g. Tell me about a challenge you overcame..." value={custom} onChange={e => setCustom(e.target.value)} />
+            <label className="input-label">What are you practicing? Write the topic, question, or assignment.</label>
+            <input className="input" type="text" placeholder="e.g. My AP Gov presentation on the electoral college" value={custom} onChange={e => setCustom(e.target.value)} />
+            <p className="text-muted" style={{ fontSize: '12.5px', marginTop: '10px', lineHeight: 1.6 }}>
+              Rehearsing something you already wrote? Paste the full script below — you&apos;ll get feedback on
+              delivery, and on how closely you stuck to it.
+            </p>
           </div>
         )}
 

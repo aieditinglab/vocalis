@@ -2,8 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
+import Link from 'next/link'
 import { getSessions, addTokens, getUser, computeTokensForSession } from '@/lib/db'
 import { generateCoaching, detectPersonalBests, getCelebrationMessage } from '@/lib/coachingEngine'
+import { getLastLesson, getProgress } from '@/lib/roadmapDb'
+import { getTrack, getLesson, nextLesson, isLevelComplete, levelLabel, trackLength, trackPercent } from '@/lib/roadmaps'
 import type { Session } from '@/lib/types'
 
 function fmt(s: number) {
@@ -20,6 +23,39 @@ export default function LevelUpPage() {
   const [celebration, setCelebration] = useState('')
   const [loading, setLoading]         = useState(true)
   const [status, setStatus]           = useState('')
+  const [roadmap, setRoadmap]         = useState<{
+    trackLabel: string; trackId: string; lessonId: number; lessonTitle: string
+    levelDone: boolean; levelName: string
+    next: { id: number; title: string } | null
+    done: number; total: number; pct: number
+  } | null>(null)
+
+  // Roadmap context for the just-finished lesson, if this rep came from one.
+  useEffect(() => {
+    const load = async () => {
+      const last = getLastLesson()
+      if (!last) return
+      const track = getTrack(last.trackId)
+      const lesson = getLesson(last.trackId, last.lessonId)
+      if (!track || !lesson) return
+
+      const progress = await getProgress(last.trackId)
+      const nxt = nextLesson(last.trackId, last.lessonId)
+      setRoadmap({
+        trackLabel: track.label,
+        trackId: last.trackId,
+        lessonId: last.lessonId,
+        lessonTitle: lesson.title,
+        levelDone: isLevelComplete(last.trackId, lesson.level, progress.completedLessons),
+        levelName: levelLabel(last.trackId, lesson.level),
+        next: nxt ? { id: nxt.id, title: nxt.title } : null,
+        done: progress.completedLessons.length,
+        total: trackLength(last.trackId),
+        pct: trackPercent(last.trackId, progress.completedLessons),
+      })
+    }
+    load()
+  }, [])
 
   useEffect(() => {
     const run = async () => {
@@ -112,7 +148,44 @@ export default function LevelUpPage() {
     <>
       <Nav rightContent={<span className="text-muted" style={{ fontSize: '13px' }}>Session Saved ✓</span>} />
       <div className="container">
-        <p className="eyebrow anim-slide-up anim-d1">STEP 5 — LEVEL UP</p>
+        <p className="eyebrow anim-slide-up anim-d1">
+          {roadmap ? `${roadmap.trackLabel.toUpperCase()} — LESSON ${roadmap.lessonId} COMPLETE` : 'STEP 5 — LEVEL UP'}
+        </p>
+
+        {/* Roadmap progress — the visible "you moved forward" moment */}
+        {roadmap && (
+          <div className="anim-slide-up anim-d1" style={{
+            background: roadmap.levelDone ? 'rgba(170,255,0,.08)' : 'var(--card)',
+            border: `1px solid ${roadmap.levelDone ? 'rgba(170,255,0,.3)' : 'var(--border)'}`,
+            borderRadius: '20px', padding: '24px 26px', marginBottom: '16px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <span style={{ fontSize: '26px' }}>{roadmap.levelDone ? '🏅' : '✓'}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: '16px', color: roadmap.levelDone ? 'var(--accent)' : 'var(--text-primary)' }}>
+                  {roadmap.levelDone ? `${roadmap.levelName} complete!` : `${roadmap.lessonTitle} — done`}
+                </div>
+                <div className="text-muted" style={{ fontSize: '13px', marginTop: '2px' }}>
+                  {roadmap.done} of {roadmap.total} lessons in {roadmap.trackLabel}
+                </div>
+              </div>
+              <span className="font-display" style={{ fontSize: '24px', fontWeight: 900, color: 'var(--accent)' }}>{roadmap.pct}%</span>
+            </div>
+            <div className="prog-track">
+              <div className="prog-fill" style={{ background: 'var(--accent)', width: `${roadmap.pct}%` }} />
+            </div>
+            {roadmap.next && (
+              <p className="text-muted" style={{ fontSize: '13px', marginTop: '14px' }}>
+                Unlocked next: <strong style={{ color: 'var(--text-primary)' }}>Lesson {roadmap.next.id} — {roadmap.next.title}</strong>
+              </p>
+            )}
+            {!roadmap.next && (
+              <p style={{ fontSize: '13px', marginTop: '14px', color: 'var(--accent)', fontWeight: 600 }}>
+                That was the final lesson in this track. 🎉
+              </p>
+            )}
+          </div>
+        )}
 
         {bests?.highestClarity && (
           <div className="anim-slide-up anim-d1" style={{ background: 'rgba(170,255,0,.08)', border: '1px solid rgba(170,255,0,.3)', borderRadius: '16px', padding: '14px 20px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -182,8 +255,24 @@ export default function LevelUpPage() {
         </div>
 
         <div className="btn-pair anim-slide-up anim-d5">
-          <button className="btn btn-primary btn-lg btn-full" onClick={() => router.push('/record')}>🎤 Start Another Rep</button>
-          <button className="btn btn-outline btn-lg" onClick={() => router.push('/dashboard')} style={{ padding: '18px 24px' }}>Dashboard</button>
+          {roadmap ? (
+            roadmap.next ? (
+              <Link href={`/lesson/${roadmap.trackId}/${roadmap.next.id}`} className="btn btn-primary btn-lg btn-full">
+                Next: {roadmap.next.title} →
+              </Link>
+            ) : (
+              <Link href="/roadmap" className="btn btn-primary btn-lg btn-full">Pick your next track →</Link>
+            )
+          ) : (
+            <button className="btn btn-primary btn-lg btn-full" onClick={() => router.push('/record')}>🎤 Start Another Rep</button>
+          )}
+          <button
+            className="btn btn-outline btn-lg"
+            onClick={() => router.push(roadmap ? `/roadmap/${roadmap.trackId}` : '/dashboard')}
+            style={{ padding: '18px 24px' }}
+          >
+            {roadmap ? 'Full track' : 'Dashboard'}
+          </button>
         </div>
       </div>
     </>

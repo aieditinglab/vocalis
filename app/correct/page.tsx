@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getPendingSession, clearPendingSession, saveSession, computeTokensForSession } from '@/lib/db'
+import { completeLesson, tagLatestSession, setLastLesson, clearLastLesson } from '@/lib/roadmapDb'
 import Link from 'next/link'
 
 export default function CorrectPage() {
@@ -57,6 +58,20 @@ export default function CorrectPage() {
         const ok = await saveSession(sessionToSave)
 
         if (ok) {
+          // Roadmap bookkeeping — only when this rep came from a lesson.
+          const trackId  = pending.trackId
+          const lessonId = Number(pending.lessonId)
+          if (trackId && lessonId) {
+            await tagLatestSession(trackId, lessonId)
+            await completeLesson(trackId, lessonId)
+            // /levelup reads this to show "lesson complete" and what's next.
+            setLastLesson({ trackId, lessonId })
+          } else {
+            // Free practice — drop any earlier lesson or /levelup would still
+            // congratulate them for a lesson they didn't just do.
+            clearLastLesson()
+          }
+
           setSaved(true)
           clearPendingSession()
         } else {

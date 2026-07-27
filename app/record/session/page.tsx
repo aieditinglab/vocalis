@@ -10,11 +10,11 @@ const MAX = 660
 function fmt(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
 }
-type Phase = 'perm' | 'idle' | 'recording' | 'playback'
+type Phase = 'perm' | 'idle' | 'prep' | 'recording' | 'playback'
 
 const FILLERS = ['um', 'uh', 'like', 'you know', 'basically', 'literally', 'right', 'so', 'actually', 'honestly', 'kind of', 'sort of', 'i mean', 'yeah', 'okay', 'well']
 
-function analyzeTranscript(transcript: string, duration: number) {
+function analyzeTranscript(transcript: string, duration: number, minSec = 30, maxSec = MAX) {
   const words = transcript.trim().split(/\s+/).filter(Boolean)
   const wordCount = words.length
   const pace = duration > 0 ? Math.round((wordCount / duration) * 60) : 0
@@ -25,7 +25,9 @@ function analyzeTranscript(transcript: string, duration: number) {
     const matches = lc.match(new RegExp(`\\b${f}\\b`, 'gi'))
     if (matches) { fillerCount += matches.length; foundFillers.push(`${f} ×${matches.length}`) }
   })
-  const lengthStatus: 'in-range' | 'too-short' | 'too-long' = duration < 30 ? 'too-short' : duration > 660 ? 'too-long' : 'in-range'
+  // Lessons set their own floor — a 30s lesson shouldn't be graded against the
+  // generic 30s minimum and come back "too short" for a valid answer.
+  const lengthStatus: 'in-range' | 'too-short' | 'too-long' = duration < minSec ? 'too-short' : duration > maxSec ? 'too-long' : 'in-range'
   let clarity = 100
   clarity -= Math.min(fillerCount * 5, 45)
   if (pace > 180) clarity -= 15
@@ -42,8 +44,24 @@ function analyzeTranscript(transcript: string, duration: number) {
 export default function RecordSessionPage() {
   const router = useRouter()
   const pending = getPendingSession()
+
+  // ── Lesson context (absent for free/custom practice) ──────────────────────
+  const lesson = pending?.trackId && pending?.lessonId ? {
+    trackId:      String(pending.trackId),
+    lessonId:     Number(pending.lessonId),
+    title:        String(pending.lessonTitle || ''),
+    framework:    String(pending.framework || ''),
+    beats:        (Array.isArray(pending.beats) ? pending.beats : []) as string[],
+    prepSeconds:  Number(pending.prepSeconds) || 45,
+    targetSeconds: Number(pending.targetSeconds) || 60,
+    minSeconds:   Number(pending.minSeconds) || 30,
+    levelName:    String(pending.levelName || ''),
+  } : null
+  const MIN = lesson?.minSeconds ?? 30
+
   const [phase, setPhase]         = useState<Phase>('perm')
   const [secs, setSecs]           = useState(0)
+  const [prepLeft, setPrepLeft]   = useState(0)
   const [tooShort, setTooShort]   = useState(false)
   const [audioUrl, setAudioUrl]   = useState<string | null>(null)
   const [duration, setDuration]   = useState(0)
@@ -62,6 +80,7 @@ export default function RecordSessionPage() {
   const recognitionRef = useRef<any>(null)
   const fullTranscriptRef = useRef('')
   const recognitionResultCountRef = useRef(0)
+  const autoStartedRef = useRef(false)
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -155,9 +174,34 @@ export default function RecordSessionPage() {
 
   const stopRec = () => { clearInterval(timerRef.current!); if (mediaRef.current?.state !== 'inactive') mediaRef.current?.stop() }
 
+  // ── Prep countdown — dedicated think time before the mic opens ─────────────
+  const beginPrep = () => {
+    if (!lesson) { startRec(); return }
+    autoStartedRef.current = false
+    setPrepLeft(lesson.prepSeconds)
+    setPhase('prep')
+  }
+
+  useEffect(() => {
+    if (phase !== 'prep') return
+    if (prepLeft <= 0) {
+      if (!autoStartedRef.current) { autoStartedRef.current = true; startRec() }
+      return
+    }
+    const t = setTimeout(() => setPrepLeft(s => s - 1), 1000)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, prepLeft])
+
+  const skipPrep = () => {
+    if (autoStartedRef.current) return
+    autoStartedRef.current = true
+    startRec()
+  }
+
   const handleBtn = () => {
-    if (phase === 'idle') startRec()
-    else if (phase === 'recording') { if (secs < 30) setTooShort(true); else stopRec() }
+    if (phase === 'idle') { lesson ? beginPrep() : startRec() }
+    else if (phase === 'recording') { if (secs < MIN) setTooShort(true); else stopRec() }
   }
 
   const playPause = () => {
@@ -174,7 +218,7 @@ export default function RecordSessionPage() {
   }
 
   const goNext = () => {
-    const analysis = analyzeTranscript(fullTranscriptRef.current, duration)
+    const analysis = analyzeTranscript(fullTranscriptRef.current, duration, MIN, MAX)
     const p = getPendingSession() || {}
     setPendingSession({ ...p, ...analysis, duration })
     router.push('/self-rate')
@@ -186,15 +230,38 @@ export default function RecordSessionPage() {
     audioStore.clear(); setAudioUrl(null)
     setLiveTranscript(''); fullTranscriptRef.current = ''
     recognitionResultCountRef.current = 0
+    autoStartedRef.current = false
   }
 
-  const timerColor = phase === 'recording' ? (secs < 30 ? 'var(--hot)' : 'var(--accent)') : 'var(--text-muted)'
+  const timerColor = phase === 'recording' ? (secs < MIN ? 'var(--hot)' : 'var(--accent)') : 'var(--text-muted)'
+  const backHref = lesson ? `/lesson/${lesson.trackId}/${lesson.lessonId}` : '/record'
+
+  // Small reusable beats list — shown during prep and (compactly) while recording
+  const BeatsList = ({ compact }: { compact?: boolean }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? '7px' : '12px', textAlign: 'left' }}>
+      {lesson!.beats.map((beat, i) => (
+        <div key={i} style={{ display: 'flex', gap: '11px', alignItems: 'flex-start' }}>
+          <div style={{
+            width: compact ? '19px' : '24px', height: compact ? '19px' : '24px', borderRadius: '6px', flexShrink: 0,
+            background: 'var(--card2)', border: '1px solid var(--border-light)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: compact ? '10px' : '12px', fontWeight: 700, color: 'var(--accent)', marginTop: '1px',
+          }}>
+            {i + 1}
+          </div>
+          <p style={{ fontSize: compact ? '13px' : '15px', lineHeight: 1.5, color: compact ? 'var(--text-muted)' : 'var(--text-primary)' }}>{beat}</p>
+        </div>
+      ))}
+    </div>
+  )
 
   return (
     <>
-      <Nav backHref="/record" rightContent={<span className="text-muted" style={{ fontSize: '13px' }}>{(pending as any)?.category || 'Recording'}</span>} />
+      <Nav backHref={backHref} rightContent={<span className="text-muted" style={{ fontSize: '13px' }}>{(pending as any)?.category || 'Recording'}</span>} />
       <div className="container" style={{ textAlign: 'center' }}>
-        <p className="eyebrow anim-slide-up anim-d1">STEP 1 OF 5 — VOICE</p>
+        <p className="eyebrow anim-slide-up anim-d1">
+          {lesson ? `LESSON ${lesson.lessonId} — ${lesson.title.toUpperCase()}` : 'STEP 1 OF 5 — VOICE'}
+        </p>
 
         {phase === 'perm' && (
           <div className="mic-perm-box anim-slide-up anim-d2">
@@ -215,13 +282,66 @@ export default function RecordSessionPage() {
           </div>
         )}
 
+        {/* ── PREP PHASE — think time, mic still closed ── */}
+        {phase === 'prep' && lesson && (
+          <>
+            <div className="anim-slide-up anim-d2" style={{ background: 'rgba(0,174,255,.05)', border: '1px solid rgba(0,174,255,.25)', borderRadius: '24px', padding: '32px 28px', marginBottom: '20px' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.12em', color: 'var(--blue)', marginBottom: '14px' }}>
+                THINK FIRST — MIC IS STILL OFF
+              </p>
+              <div className="font-display" style={{ fontSize: 'clamp(56px,11vw,84px)', fontWeight: 900, letterSpacing: '-.05em', lineHeight: 1, color: 'var(--blue)' }}>
+                {prepLeft}
+              </div>
+              <p className="text-muted" style={{ fontSize: '13px', marginTop: '10px' }}>
+                Recording starts automatically when this hits zero
+              </p>
+              <div style={{ maxWidth: '360px', margin: '18px auto 0' }}>
+                <div className="prog-track">
+                  <div className="prog-fill" style={{ background: 'var(--blue)', width: `${(prepLeft / lesson.prepSeconds) * 100}%`, transition: 'width 1s linear' }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="anim-slide-up anim-d3" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px 26px', marginBottom: '16px', textAlign: 'left' }}>
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '10px' }}>YOUR PROMPT</p>
+              <p style={{ fontSize: '17px', fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.45, marginBottom: '20px' }}>
+                &ldquo;{pending?.prompt}&rdquo;
+              </p>
+              {lesson.framework && (
+                <>
+                  <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--blue)', marginBottom: '10px' }}>STRUCTURE</p>
+                  <p style={{ fontSize: '14px', fontWeight: 600, marginBottom: '20px' }}>{lesson.framework}</p>
+                </>
+              )}
+              <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--accent)', marginBottom: '14px' }}>HIT THESE POINTS</p>
+              <BeatsList />
+            </div>
+
+            <button className="btn btn-primary btn-full btn-lg anim-slide-up anim-d4" onClick={skipPrep}>
+              I&apos;m ready — start recording now →
+            </button>
+          </>
+        )}
+
         {(phase === 'idle' || phase === 'recording') && (
           <>
-            <div className="anim-slide-up anim-d2" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px 28px', marginBottom: '24px' }}>
+            <div className="anim-slide-up anim-d2" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px 28px', marginBottom: '24px', textAlign: lesson ? 'left' : 'center' }}>
               <p style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '10px' }}>YOUR PROMPT</p>
               <p style={{ fontSize: 'clamp(16px,2.2vw,20px)', fontWeight: 600, letterSpacing: '-.02em', lineHeight: 1.4 }}>
                 &ldquo;{(pending as any)?.prompt || 'Tell me about yourself.'}&rdquo;
               </p>
+
+              {lesson && lesson.framework && (
+                <p style={{ fontSize: '13px', color: 'var(--blue)', fontWeight: 600, marginTop: '14px' }}>
+                  {lesson.framework}
+                </p>
+              )}
+              {lesson && lesson.beats.length > 0 && (
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
+                  <BeatsList compact />
+                </div>
+              )}
+
               {(pending as any)?.uploadedScript && (
                 <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(170,255,0,.06)', borderRadius: '10px', fontSize: '12px', color: 'var(--accent)' }}>
                   📎 Script uploaded — AI will compare your delivery to your script
@@ -237,16 +357,28 @@ export default function RecordSessionPage() {
             <div className="anim-slide-up anim-d3" style={{ marginBottom: '16px' }}>
               <div className="font-display" style={{ fontSize: 'clamp(56px,10vw,76px)', fontWeight: 900, letterSpacing: '-.05em', lineHeight: 1, color: timerColor, transition: 'color .3s' }}>{fmt(secs)}</div>
               <p className="text-muted" style={{ fontSize: '13px', marginTop: '8px' }}>
-                Min 30s · Max 11:00
-                {phase === 'recording' && secs >= 30 && <span style={{ color: 'var(--accent)', marginLeft: '8px' }}>● Recording</span>}
+                {lesson ? `Aim for ~${lesson.targetSeconds}s · min ${MIN}s` : `Min ${MIN}s · Max 11:00`}
+                {phase === 'recording' && secs >= MIN && <span style={{ color: 'var(--accent)', marginLeft: '8px' }}>● Recording</span>}
               </p>
             </div>
 
             {phase === 'recording' && (
               <div style={{ maxWidth: '400px', margin: '0 auto 16px' }}>
-                <div className="prog-track">
-                  <div className="prog-fill" style={{ background: secs < 30 ? 'var(--hot)' : 'var(--accent)', width: `${(secs / MAX) * 100}%`, transition: 'width 1s linear' }} />
+                {/* For lessons the bar fills toward the target length, not the 11-min ceiling */}
+                <div className="prog-track" style={{ position: 'relative' }}>
+                  <div className="prog-fill" style={{
+                    background: secs < MIN ? 'var(--hot)' : 'var(--accent)',
+                    width: `${Math.min(100, (secs / (lesson ? lesson.targetSeconds : MAX)) * 100)}%`,
+                    transition: 'width 1s linear',
+                  }} />
                 </div>
+                {lesson && (
+                  <p className="text-muted" style={{ fontSize: '11px', marginTop: '6px' }}>
+                    {secs < MIN ? `${MIN - secs}s to minimum`
+                      : secs < lesson.targetSeconds ? `${lesson.targetSeconds - secs}s to target`
+                      : 'Target reached — wrap up when ready'}
+                  </p>
+                )}
               </div>
             )}
 
@@ -273,9 +405,11 @@ export default function RecordSessionPage() {
               </div>
             </div>
             <p className="text-muted" style={{ fontSize: '14px' }}>
-              {phase === 'idle' ? 'Tap to start recording' : secs < 30 ? `Keep talking... (${30 - secs}s minimum)` : 'Tap to stop'}
+              {phase === 'idle'
+                ? (lesson ? `Tap for ${lesson.prepSeconds}s of think time` : 'Tap to start recording')
+                : secs < MIN ? `Keep talking... (${MIN - secs}s minimum)` : 'Tap to stop'}
             </p>
-            {tooShort && <p style={{ color: 'var(--hot)', fontSize: '13px', marginTop: '8px' }}>Minimum 30 seconds required</p>}
+            {tooShort && <p style={{ color: 'var(--hot)', fontSize: '13px', marginTop: '8px' }}>Minimum {MIN} seconds required</p>}
           </>
         )}
 

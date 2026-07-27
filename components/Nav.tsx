@@ -42,6 +42,7 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
         {rightContent}
         {showApp && (
           <>
+            <Link href="/roadmap"     className="btn btn-outline btn-sm nav-hide-mobile">Roadmap</Link>
             <Link href="/dashboard"   className="btn btn-outline btn-sm nav-hide-mobile">Dashboard</Link>
             <Link href="/practice"    className="btn btn-outline btn-sm nav-hide-mobile">Practice</Link>
             <Link href="/leaderboard" className="btn btn-outline btn-sm nav-hide-mobile">Leaderboard</Link>
@@ -54,7 +55,7 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
                 ⚙️ Admin
               </Link>
             )}
-            <Link href="/record" className="btn btn-primary btn-sm">🎤 New Rep</Link>
+            <Link href="/roadmap" className="btn btn-primary btn-sm">▶ Continue</Link>
             <div className="token-pill" style={{
     background: 'var(--card)', border: '1px solid var(--border-light)',
     borderRadius: '100px', padding: '6px 12px', fontSize: '13px',
@@ -92,7 +93,9 @@ export default function Nav({ backHref, backLabel = '← Back', rightContent, sh
           display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 99,
         }}>
           {[
+            { href: '/roadmap',     label: 'Roadmap' },
             { href: '/dashboard',   label: 'Dashboard' },
+            { href: '/record',      label: 'Custom topic' },
             { href: '/practice',    label: 'Practice' },
             { href: '/leaderboard', label: 'Leaderboard' },
             { href: '/games',       label: 'Games' },

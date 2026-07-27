@@ -1,8 +1,12 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Nav from '@/components/Nav'
 import { getSessions, computeStats, computeStreak, getSettings, deleteSession } from '@/lib/db'
+import { getAllProgress, getActiveTrack } from '@/lib/roadmapDb'
+import type { TrackProgress } from '@/lib/roadmapDb'
+import { TRACKS, getLesson, getTrack, trackLength, trackPercent, levelLabel } from '@/lib/roadmaps'
 import type { Session } from '@/lib/types'
 
 function fmt(s: number) { return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}` }
@@ -20,6 +24,8 @@ export default function DashboardPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [tab, setTab] = useState<'overview' | 'sessions' | 'bests'>('overview')
   const [loading, setLoading] = useState(true)
+  const [progress, setProgress] = useState<Record<string, TrackProgress> | null>(null)
+  const [activeTrack, setActiveTrack] = useState<string | null>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -32,6 +38,31 @@ export default function DashboardPage() {
     }
     load()
   }, [])
+
+  // Roadmap progress loads separately so a slow query never blocks the stats.
+  useEffect(() => {
+    const load = async () => {
+      const [all, act] = await Promise.all([getAllProgress(), getActiveTrack()])
+      setProgress(all)
+      setActiveTrack(act)
+    }
+    load()
+  }, [])
+
+  // Where to send them next: the active track, else any track with progress.
+  const resumeTrackId = activeTrack && progress?.[activeTrack]
+    ? activeTrack
+    : progress
+      ? (TRACKS.find(t => (progress[t.id]?.completedLessons.length ?? 0) > 0)?.id ?? null)
+      : null
+  const resumeTrack = resumeTrackId ? getTrack(resumeTrackId) : undefined
+  const resumeProgress = resumeTrackId ? progress?.[resumeTrackId] : undefined
+  const resumeLesson = resumeTrackId && resumeProgress
+    ? getLesson(resumeTrackId, resumeProgress.currentLesson)
+    : undefined
+  const startedTracks = progress
+    ? TRACKS.filter(t => (progress[t.id]?.completedLessons.length ?? 0) > 0)
+    : []
 
   const handleDelete = async (id: string) => {
     await deleteSession(id)
@@ -63,6 +94,51 @@ export default function DashboardPage() {
           </h1>
         </div>
 
+        {/* Resume — the roadmap answer to "what do I do next?" */}
+        {resumeTrack && resumeLesson && resumeProgress ? (
+          <Link href={`/lesson/${resumeTrack.id}/${resumeLesson.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+            <div className="anim-slide-up anim-d2" style={{
+              background: 'rgba(170,255,0,.05)', border: '1px solid rgba(170,255,0,.22)',
+              borderRadius: '22px', padding: '26px 30px', marginBottom: '24px',
+              display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap',
+            }}>
+              <div style={{ flex: 1, minWidth: '240px' }}>
+                <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.12em', color: 'var(--accent)', marginBottom: '10px' }}>
+                  PICK UP WHERE YOU LEFT OFF
+                </p>
+                <h2 className="font-display" style={{ fontSize: 'clamp(20px,2.6vw,27px)', fontWeight: 900, letterSpacing: '-.03em', marginBottom: '6px' }}>
+                  Lesson {resumeLesson.id}: {resumeLesson.title}
+                </h2>
+                <p className="text-muted" style={{ fontSize: '13px' }}>
+                  {resumeTrack.icon} {resumeTrack.label} · {levelLabel(resumeTrack.id, resumeLesson.level)}
+                </p>
+                <div style={{ marginTop: '16px', maxWidth: '320px' }}>
+                  <div className="prog-track">
+                    <div className="prog-fill" style={{ background: 'var(--accent)', width: `${trackPercent(resumeTrack.id, resumeProgress.completedLessons)}%` }} />
+                  </div>
+                  <p className="text-muted" style={{ fontSize: '12px', marginTop: '8px' }}>
+                    {resumeProgress.completedLessons.length} of {trackLength(resumeTrack.id)} lessons done
+                  </p>
+                </div>
+              </div>
+              <span className="btn btn-primary btn-md" style={{ flexShrink: 0 }}>Continue →</span>
+            </div>
+          </Link>
+        ) : progress !== null && (
+          <div className="anim-slide-up anim-d2" style={{
+            border: '1px dashed var(--border-light)', borderRadius: '22px', padding: '26px 30px', marginBottom: '24px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap',
+          }}>
+            <div>
+              <p style={{ fontWeight: 600, fontSize: '16px', marginBottom: '6px' }}>You haven&apos;t started a track yet</p>
+              <p className="text-muted" style={{ fontSize: '13px', maxWidth: '420px', lineHeight: 1.55 }}>
+                Pick presentations, job interviews, or college interviews and work through it lesson by lesson.
+              </p>
+            </div>
+            <Link href="/roadmap" className="btn btn-primary btn-md" style={{ flexShrink: 0 }}>Start a track →</Link>
+          </div>
+        )}
+
         {/* Tabs */}
         <div className="tab-bar anim-slide-up anim-d3" style={{ marginBottom: '32px', maxWidth: '480px' }}>
           <button className={`tab-btn ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
@@ -78,8 +154,8 @@ export default function DashboardPage() {
           <div style={{ textAlign: 'center', padding: '80px 40px', border: '1px dashed var(--border-light)', borderRadius: '24px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎤</div>
             <h2 className="font-display" style={{ fontSize: '28px', fontWeight: 900, marginBottom: '12px' }}>No sessions yet</h2>
-            <p className="text-muted" style={{ marginBottom: '24px' }}>Complete your first VOCAL rep to see your stats here.</p>
-            <button className="btn btn-primary btn-lg" onClick={() => router.push('/record')}>Start Your First Rep →</button>
+            <p className="text-muted" style={{ marginBottom: '24px' }}>Complete your first lesson to see your stats here.</p>
+            <button className="btn btn-primary btn-lg" onClick={() => router.push('/roadmap')}>Start Lesson 1 →</button>
           </div>
         ) : (
           <>
@@ -102,6 +178,48 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
+
+                {/* Track progress — every track keeps its own place */}
+                {startedTracks.length > 0 && progress && (
+                  <div className="dash-card" style={{ marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                      <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)' }}>YOUR TRACKS</p>
+                      <Link href="/roadmap" style={{ color: 'var(--accent)', fontSize: '13px', textDecoration: 'none', fontWeight: 600 }}>
+                        View roadmap →
+                      </Link>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                      {TRACKS.map(t => {
+                        const p = progress[t.id]
+                        const done = p?.completedLessons.length ?? 0
+                        const total = trackLength(t.id)
+                        const pct = p ? trackPercent(t.id, p.completedLessons) : 0
+                        const cur = p ? getLesson(t.id, p.currentLesson) : undefined
+                        return (
+                          <Link key={t.id} href={`/roadmap/${t.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                              <span style={{ fontSize: '20px', flexShrink: 0 }}>{t.icon}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '7px' }}>
+                                  <span style={{ fontSize: '14px', fontWeight: 600 }}>{t.label}</span>
+                                  <span className="text-muted" style={{ fontSize: '12px', flexShrink: 0 }}>
+                                    {done}/{total}
+                                  </span>
+                                </div>
+                                <div className="prog-track">
+                                  <div className="prog-fill" style={{ background: done > 0 ? 'var(--accent)' : 'var(--border-light)', width: `${pct}%` }} />
+                                </div>
+                                <p className="text-muted" style={{ fontSize: '11.5px', marginTop: '6px' }}>
+                                  {done >= total ? 'Complete' : done > 0 && cur ? `Next: ${cur.title}` : 'Not started'}
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Streak + trend */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>

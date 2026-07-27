@@ -17,11 +17,19 @@ export interface AICoachingInput {
   sessionHistory?: { clarityScore: number; fillerCount: number; pace: number; date: string }[]
   uploadedScript?: string
   rubric?: string
+  // Set when the recording came from a roadmap lesson rather than free practice.
+  lessonTitle?: string
+  lessonObjective?: string
+  framework?: string
+  beats?: string[]
+  targetSeconds?: number
 }
 
 export interface AICoachingResult {
   overallScore: number
   overallVerdict: string
+  /** Per-beat verdict — only present for roadmap lessons. */
+  beatCheck?: { beat: string; hit: boolean; note: string }[]
   coachingPoints: {
     icon: string; title: string; detail: string
     tag: string; tagColor: string; tagBg: string
@@ -38,8 +46,20 @@ export async function getAICoaching(input: AICoachingInput): Promise<AICoachingR
   const hasTranscript = input.transcript && input.transcript.trim().length > 20
   const hasSelfRatings = !!input.selfRatings
   const hasHistory = input.sessionHistory && input.sessionHistory.length > 0
+  const isLesson = !!(input.lessonTitle && input.beats && input.beats.length > 0)
 
-  const prompt = `You are an elite public speaking coach for teenagers. Be brutally honest, specific, and encouraging. NEVER give generic advice. Reference what this person specifically said. ALWAYS find at least 3 things to improve — even if they scored 90+, give advanced coaching. There is NEVER a case where "no feedback is needed."
+  const prompt = `You are an elite public speaking coach for high school students. Be brutally honest, specific, and encouraging. NEVER give generic advice. Reference what this person specifically said. ALWAYS find at least 3 things to improve — even if they scored 90+, give advanced coaching. There is NEVER a case where "no feedback is needed."
+${isLesson ? `
+IMPORTANT — THIS IS A STRUCTURED LESSON, NOT FREE IMPROVISATION.
+The student was given the shape of the answer and the exact points to hit before they spoke. So do NOT praise or criticize their idea generation, creativity, or what they chose to talk about. Judge ONLY their DELIVERY of the structure they were handed: did they hit each point, in order, with clean pacing and no filler? Coach the execution, never the content choice.
+
+LESSON: "${input.lessonTitle}"
+GOAL OF THIS LESSON: ${input.lessonObjective || 'n/a'}
+REQUIRED STRUCTURE: ${input.framework}
+POINTS THEY WERE TOLD TO HIT:
+${input.beats!.map((b, i) => `${i + 1}. ${b}`).join('\n')}
+TARGET LENGTH: ~${input.targetSeconds}s (they spoke for ${fmt(input.duration)})
+` : ''}
 
 RECORDING DETAILS:
 - Category: ${input.category}
@@ -60,6 +80,9 @@ Respond with ONLY valid JSON, no markdown, no explanation:
 {
   "overallScore": <0-100>,
   "overallVerdict": "<2 honest sentences about this specific performance>",
+  ${isLesson ? `"beatCheck": [
+${input.beats!.map(b => `    {"beat":"${b.replace(/"/g, '\\"')}","hit":<true|false>,"note":"<one short sentence: how they covered it, or what was missing>"}`).join(',\n')}
+  ],` : ''}
   "coachingPoints": [
     {
       "icon": "<emoji>",
@@ -170,11 +193,19 @@ function fallbackCoaching(input: AICoachingInput): AICoachingResult {
     })
   }
 
-  points.push({
-    icon: '💡', title: 'Open with your conclusion, not your intro',
-    detail: `The most powerful speaking change you can make: state your main point in the very first sentence. Most speakers warm up for 20-30 seconds before getting to their point — by which time listeners have formed their impression. Your opening line should be the thing you most want them to remember. Everything after is just evidence.`,
-    tag: 'STRUCTURE', tagColor: '#AAFF00', tagBg: 'rgba(170,255,0,0.10)', priority: 'medium'
-  })
+  if (input.framework && input.beats && input.beats.length > 0) {
+    points.push({
+      icon: '🧭', title: `Hold the structure: ${input.framework}`,
+      detail: `This lesson gives you the shape of the answer so you never have to invent one mid-sentence. Play your recording back with the ${input.beats.length} points in front of you and check them off out loud: ${input.beats.map((b, i) => `(${i + 1}) ${b}`).join('; ')}. Any point you skipped or blurred into another is your one thing to fix on the next take — re-record and hit them in order.`,
+      tag: 'STRUCTURE', tagColor: '#AAFF00', tagBg: 'rgba(170,255,0,0.10)', priority: 'high'
+    })
+  } else {
+    points.push({
+      icon: '💡', title: 'Open with your conclusion, not your intro',
+      detail: `The most powerful speaking change you can make: state your main point in the very first sentence. Most speakers warm up for 20-30 seconds before getting to their point — by which time listeners have formed their impression. Your opening line should be the thing you most want them to remember. Everything after is just evidence.`,
+      tag: 'STRUCTURE', tagColor: '#AAFF00', tagBg: 'rgba(170,255,0,0.10)', priority: 'medium'
+    })
+  }
 
   if (points.length < 3) {
     points.push({
@@ -195,7 +226,9 @@ function fallbackCoaching(input: AICoachingInput): AICoachingResult {
       { label: 'Pacing',     selfScore: input.selfRatings.pacing * 20,     aiScore: input.pace > 0 ? Math.max(30, 100 - Math.abs(input.pace - 150)) : 60, gap: 'Pacing is measured objectively from your recording.' },
       { label: 'Structure',  selfScore: input.selfRatings.structure * 20,  aiScore: Math.min(100, score + 10), gap: 'Structure improves with the STAR method — see coaching below.' },
     ] : undefined,
-    nextStepDrill: `Set a 3-minute timer and speak about "${input.prompt}" again out loud. This time, pause instead of filling any silence and open with your main point. Record it and compare your filler count.`,
+    nextStepDrill: input.framework
+      ? `Say the answer out loud three times in a row using only the structure — ${input.framework}. Don't change the content, just tighten the delivery: pause at each arrow instead of using a filler word. Then re-record this lesson and compare your filler count.`
+      : `Set a 3-minute timer and speak about "${input.prompt}" again out loud. This time, pause instead of filling any silence and open with your main point. Record it and compare your filler count.`,
     celebrationMsg: input.fillerCount === 0
       ? `Zero filler words — that's genuinely rare. Most speakers average 8-10 per minute. You've already developed the habit most people struggle with for years.`
       : `You completed a full response without stopping — that takes more courage than most people realize. Every rep builds the habit.`

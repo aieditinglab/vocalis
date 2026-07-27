@@ -42,7 +42,8 @@ export default function ObservePage() {
         pace: (p as any)?.pace || 0,
         wordCount: (p as any)?.wordCount || 0,
         clarityScore: (p as any)?.clarityScore || Math.max(40, 75 - ((p as any)?.fillerCount || 0) * 3),
-        lengthStatus: dur < 30 ? 'too-short' : dur > 660 ? 'too-long' : 'in-range',
+        // Lessons carry their own minimum; free practice keeps the 30s floor.
+        lengthStatus: dur < (Number((p as any)?.minSeconds) || 30) ? 'too-short' : dur > 660 ? 'too-long' : 'in-range',
         transcript: (p as any)?.transcript || '',
       }
       setMetrics(m)
@@ -87,6 +88,13 @@ export default function ObservePage() {
         })),
         uploadedScript: (p as any)?.uploadedScript || '',
         rubric: (p as any)?.rubric || '',
+        // Lesson context — lets the AI grade the specific thing being practiced
+        // instead of giving generic speaking advice.
+        lessonTitle:     (p as any)?.lessonTitle || '',
+        lessonObjective: (p as any)?.lessonObjective || '',
+        framework:       (p as any)?.framework || '',
+        beats:           (p as any)?.beats || [],
+        targetSeconds:   (p as any)?.targetSeconds || 0,
       }
 
       const result = await getAICoaching(aiInput)
@@ -237,6 +245,35 @@ export default function ObservePage() {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Beat check — did they hit the points the lesson gave them? */}
+        {!loading && aiResult?.beatCheck && aiResult.beatCheck.length > 0 && (
+          <div className="anim-slide-up anim-d3" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: '20px', padding: '24px', marginBottom: '20px' }}>
+            <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '.1em', color: 'var(--text-muted)', marginBottom: '6px' }}>DID YOU HIT YOUR POINTS?</p>
+            <p className="text-muted" style={{ fontSize: '12.5px', marginBottom: '18px' }}>
+              {aiResult.beatCheck.filter(b => b.hit).length} of {aiResult.beatCheck.length} covered
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {aiResult.beatCheck.map((b, i) => (
+                <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '7px', flexShrink: 0, marginTop: '1px',
+                    background: b.hit ? 'rgba(170,255,0,.12)' : 'rgba(255,184,0,.12)',
+                    border: `1px solid ${b.hit ? 'rgba(170,255,0,.3)' : 'rgba(255,184,0,.3)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '12px', color: b.hit ? 'var(--accent)' : 'var(--amber)',
+                  }}>
+                    {b.hit ? '✓' : '!'}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ fontSize: '14px', fontWeight: 600, marginBottom: '3px' }}>{b.beat}</p>
+                    <p className="text-muted" style={{ fontSize: '13px', lineHeight: 1.55 }}>{b.note}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
