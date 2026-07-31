@@ -8,14 +8,28 @@ export interface FeatureFlag {
   updated_at: string
 }
 
+/**
+ * Reads the profiles.is_admin flag rather than comparing an email string, so
+ * this agrees with the RLS policies and the admin_* functions, which all gate
+ * on is_admin(). This check only decides what UI to render — every privileged
+ * read is independently enforced server-side, so faking it client-side yields
+ * an empty page, not data.
+ */
 export async function getIsAdmin(): Promise<boolean> {
-    const sb = createClient()
-    try {
-      const { data: { session } } = await sb.auth.getSession()
-      if (!session?.user) return false
-      return session.user.email === 'aieditinglab@gmail.com'
-    } catch { return false }
-  }
+  const sb = createClient()
+  try {
+    const { data: { session } } = await sb.auth.getSession()
+    if (!session?.user) return false
+
+    const { data } = await sb
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', session.user.id)
+      .maybeSingle()
+
+    return data?.is_admin === true
+  } catch { return false }
+}
 
 export async function getFeatureFlags(): Promise<FeatureFlag[]> {
   const sb = createClient()

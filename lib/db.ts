@@ -124,7 +124,23 @@ export async function getSessions(): Promise<Session[]> {
   }
 }
 
-export async function saveSession(s: Session): Promise<boolean> {
+/**
+ * Research-only fields, kept off the Session model because they describe how a
+ * rep was produced rather than how it scored. Feeds the admin dashboard's
+ * curriculum and prep-behavior analysis; all optional and all nullable.
+ */
+export interface SessionResearch {
+  trackId?: string | null
+  lessonId?: number | null
+  prepSecondsUsed?: number | null
+  prepSkipped?: boolean | null
+  beatsTotal?: number | null
+  beatsHit?: number | null
+  beatCheck?: unknown | null
+  lessonMs?: number | null
+}
+
+export async function saveSession(s: Session, research?: SessionResearch): Promise<boolean> {
   const sb = createClient()
   const user = await getUser()
 
@@ -132,6 +148,8 @@ export async function saveSession(s: Session): Promise<boolean> {
     console.error('saveSession: no authenticated user')
     return false
   }
+
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null)
 
   const payload = {
     id: s.id && s.id.match(/^[0-9a-f-]{36}$/) ? s.id : crypto.randomUUID(),
@@ -147,6 +165,17 @@ export async function saveSession(s: Session): Promise<boolean> {
     feedback: Array.isArray(s.feedback) ? s.feedback : [],
     transcript_preview: s.transcriptPreview || '',
     tokens_earned: Math.round(s.tokensEarned || 0),
+    // Stamped at insert time so the row is complete in one round trip. This
+    // also makes track/lesson attribution reliable — tagLatestSession() used to
+    // race by re-finding "the newest row" after the fact.
+    track_id:          research?.trackId ?? null,
+    lesson_id:         num(research?.lessonId),
+    prep_seconds_used: num(research?.prepSecondsUsed),
+    prep_skipped:      typeof research?.prepSkipped === 'boolean' ? research.prepSkipped : null,
+    beats_total:       num(research?.beatsTotal),
+    beats_hit:         num(research?.beatsHit),
+    beat_check:        research?.beatCheck ?? null,
+    lesson_ms:         num(research?.lessonMs),
   }
 
   try {

@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getPendingSession, clearPendingSession, saveSession, computeTokensForSession } from '@/lib/db'
-import { completeLesson, tagLatestSession, setLastLesson, clearLastLesson } from '@/lib/roadmapDb'
+import { completeLesson, setLastLesson, clearLastLesson } from '@/lib/roadmapDb'
+import { trackNow, readLessonElapsedMs, clearLessonClock } from '@/lib/analytics'
 import Link from 'next/link'
 
 export default function CorrectPage() {
@@ -16,6 +17,7 @@ export default function CorrectPage() {
   useEffect(() => {
     const p = getPendingSession()
     setPending(p)
+    if (p) trackNow('correct', { trackId: p.trackId ?? null, lessonId: p.lessonId ?? null })
   }, [])
 
   const feedback = pending?.feedback || []
@@ -55,14 +57,35 @@ export default function CorrectPage() {
           tokensEarned,
         }
 
-        const ok = await saveSession(sessionToSave)
+        const trackId  = pending.trackId
+        const lessonId = Number(pending.lessonId) || null
+        const lessonMs = readLessonElapsedMs()
+
+        // Research fields ride along with the insert. track_id/lesson_id are
+        // stamped here rather than patched afterwards by tagLatestSession(),
+        // which had to re-find "the newest row" and could attribute the wrong one.
+        const ok = await saveSession(sessionToSave, {
+          trackId:         trackId || null,
+          lessonId,
+          prepSecondsUsed: pending.prepSecondsUsed ?? null,
+          prepSkipped:     typeof pending.prepSkipped === 'boolean' ? pending.prepSkipped : null,
+          beatsTotal:      pending.beatsTotal ?? null,
+          beatsHit:        pending.beatsHit ?? null,
+          beatCheck:       pending.beatCheck ?? null,
+          lessonMs:        trackId && lessonId ? lessonMs : null,
+        })
 
         if (ok) {
+          trackNow('session_saved', {
+            trackId: trackId || null, lessonId,
+            score: clarityScore, duration, lessonMs,
+            prepSkipped: pending.prepSkipped ?? null,
+            beatsHit: pending.beatsHit ?? null, beatsTotal: pending.beatsTotal ?? null,
+          })
+          clearLessonClock()
+
           // Roadmap bookkeeping — only when this rep came from a lesson.
-          const trackId  = pending.trackId
-          const lessonId = Number(pending.lessonId)
           if (trackId && lessonId) {
-            await tagLatestSession(trackId, lessonId)
             await completeLesson(trackId, lessonId)
             // /levelup reads this to show "lesson complete" and what's next.
             setLastLesson({ trackId, lessonId })

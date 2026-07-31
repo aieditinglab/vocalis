@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import WaveBars from '@/components/WaveBars'
 import { getPendingSession, setPendingSession } from '@/lib/db'
+import { trackNow } from '@/lib/analytics'
 import { audioStore } from '@/lib/audioStore'
 
 const MAX = 660
@@ -182,10 +183,30 @@ export default function RecordSessionPage() {
     setPhase('prep')
   }
 
+  /**
+   * How much think time was actually consumed, and whether the user cut it
+   * short. Written into the pending session so /correct can persist it — this
+   * is what answers "do users who skip prep perform worse?".
+   */
+  const recordPrepUsage = (skipped: boolean, remaining: number) => {
+    if (!lesson) return
+    const used = Math.max(0, lesson.prepSeconds - Math.max(0, remaining))
+    const p = getPendingSession() || {}
+    setPendingSession({ ...p, prepSecondsUsed: used, prepSkipped: skipped })
+    trackNow(skipped ? 'prep_skipped' : 'prep_completed', {
+      trackId: lesson.trackId, lessonId: lesson.lessonId,
+      prepSeconds: lesson.prepSeconds, secondsUsed: used,
+    })
+  }
+
   useEffect(() => {
     if (phase !== 'prep') return
     if (prepLeft <= 0) {
-      if (!autoStartedRef.current) { autoStartedRef.current = true; startRec() }
+      if (!autoStartedRef.current) {
+        autoStartedRef.current = true
+        recordPrepUsage(false, 0)
+        startRec()
+      }
       return
     }
     const t = setTimeout(() => setPrepLeft(s => s - 1), 1000)
@@ -196,6 +217,7 @@ export default function RecordSessionPage() {
   const skipPrep = () => {
     if (autoStartedRef.current) return
     autoStartedRef.current = true
+    recordPrepUsage(true, prepLeft)
     startRec()
   }
 
@@ -221,6 +243,10 @@ export default function RecordSessionPage() {
     const analysis = analyzeTranscript(fullTranscriptRef.current, duration, MIN, MAX)
     const p = getPendingSession() || {}
     setPendingSession({ ...p, ...analysis, duration })
+    trackNow('recording_done', {
+      trackId: lesson?.trackId ?? null, lessonId: lesson?.lessonId ?? null,
+      duration, lesson: !!lesson,
+    })
     router.push('/self-rate')
   }
 

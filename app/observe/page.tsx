@@ -6,6 +6,7 @@ import { getPendingSession, setPendingSession, getSettings, getSessions } from '
 import { audioStore } from '@/lib/audioStore'
 import { getAICoaching } from '@/lib/aiCoaching'
 import type { AICoachingResult } from '@/lib/aiCoaching'
+import { trackNow } from '@/lib/analytics'
 
 function fmt(s: number) {
   return `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
@@ -100,7 +101,10 @@ export default function ObservePage() {
       const result = await getAICoaching(aiInput)
       setAiResult(result)
 
-      // Save updated analysis to pending session
+      // Save updated analysis to pending session. beatCheck is lifted out of
+      // aiAnalysis into its own field so /correct can persist it as a column —
+      // that's what makes "which beats do users miss?" answerable in aggregate.
+      const beats = result.beatCheck ?? null
       setPendingSession({
         ...p,
         ...m,
@@ -108,6 +112,17 @@ export default function ObservePage() {
         clarityScore: result.overallScore,
         feedback: result.coachingPoints,
         aiAnalysis: result,
+        beatCheck:  beats,
+        beatsTotal: beats ? beats.length : null,
+        beatsHit:   beats ? beats.filter(b => b.hit).length : null,
+      })
+
+      trackNow('observe', {
+        trackId: (p as any)?.trackId ?? null,
+        lessonId: (p as any)?.lessonId ?? null,
+        score: result.overallScore,
+        beatsTotal: beats?.length ?? null,
+        beatsHit: beats ? beats.filter(b => b.hit).length : null,
       })
 
       setStep('done')

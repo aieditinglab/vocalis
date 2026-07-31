@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Nav from '@/components/Nav'
 import { getPendingSession, setPendingSession } from '@/lib/db'
+import { trackNow } from '@/lib/analytics'
 
 const CRITERIA = [
   { key: 'confidence', label: 'Confidence', desc: 'How confident did you feel and sound?', icon: '💪' },
@@ -26,6 +27,7 @@ export default function SelfRatePage() {
     setSubmitted(true)
     const p = getPendingSession() || {}
     setPendingSession({ ...p, selfRatings: ratings })
+    trackNow('self_rate', { trackId: p.trackId ?? null, lessonId: p.lessonId ?? null })
     setTimeout(() => router.push('/observe'), 600)
   }
 

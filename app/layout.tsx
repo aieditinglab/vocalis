@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Unbounded, DM_Sans } from 'next/font/google'
 import './globals.css'
+import AnalyticsTracker from '@/components/AnalyticsTracker'
 
 const unbounded = Unbounded({ subsets:['latin'], weight:['700','900'], variable:'--font-unbounded', display:'swap' })
 const dmSans = DM_Sans({ subsets:['latin'], weight:['300','400','500','600'], variable:'--font-dm-sans', display:'swap' })
@@ -28,7 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <AnalyticsTracker />
+        {children}
+      </body>
     </html>
   )
 }

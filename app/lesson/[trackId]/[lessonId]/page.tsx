@@ -11,6 +11,7 @@ import Nav from '@/components/Nav'
 import { getTrack, getLesson, trackLength, levelLabel, minSecondsFor } from '@/lib/roadmaps'
 import { getProgress, setActiveTrack } from '@/lib/roadmapDb'
 import { setPendingSession } from '@/lib/db'
+import { trackNow, markLessonStart } from '@/lib/analytics'
 
 function fmtLen(s: number) {
   return s >= 60 ? `${Math.round(s / 60 * 10) / 10}m`.replace('.0m', 'm') : `${s}s`
@@ -59,6 +60,10 @@ export default function LessonBriefPage() {
       minSeconds: minSecondsFor(lesson),
       levelName: levelLabel(trackId, lesson.level),
     })
+    // Starts the clock for "average time per lesson" (prep + recording + review)
+    // and opens the activation funnel for this attempt.
+    markLessonStart()
+    trackNow('lesson_start', { trackId, lessonId, level: lesson.level })
     router.push('/record/session')
   }
 

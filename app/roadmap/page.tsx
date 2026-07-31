@@ -10,6 +10,7 @@ import Nav from '@/components/Nav'
 import { TRACKS, getLesson, trackLength, trackPercent, levelLabel } from '@/lib/roadmaps'
 import { getAllProgress, setActiveTrack, getActiveTrack } from '@/lib/roadmapDb'
 import type { TrackProgress } from '@/lib/roadmapDb'
+import { trackNow } from '@/lib/analytics'
 
 export default function RoadmapPage() {
   const router = useRouter()
@@ -28,6 +29,7 @@ export default function RoadmapPage() {
 
   const open = async (trackId: string) => {
     setGoing(trackId)
+    trackNow('track_selected', { trackId })
     await setActiveTrack(trackId)
     router.push(`/roadmap/${trackId}`)
   }
